@@ -46,6 +46,13 @@ abstract class ResidentRunner {
     return stopApp();
   }
 
+    Future<Null> _debugDumpRenderTree() async {
+    if (vmService != null)
+      await vmService.vm.refreshViews();
+    
+    await currentView.uiIsolate.flutterDebugDumpRenderTree();
+  }
+
   Future<Null> _debugDumpApp() async {
     if (vmService != null)
       await vmService.vm.refreshViews();

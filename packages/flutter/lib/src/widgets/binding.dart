@@ -73,6 +73,9 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
   void initServiceExtensions() {
     super.initServiceExtensions();
 
+    registerServiceExtension(
+      name: 'debugReturnElementTree', callback: debugReturnElementTree);
+
     registerSignalServiceExtension(
       name: 'debugDumpApp',
       callback: debugDumpApp
@@ -374,6 +377,71 @@ void debugDumpApp() {
   } else {
     debugPrint('<no tree currently mounted>');
   }
+}
+
+/* Allow Observatory to access
+ * the Flutter element tree.
+ *  The actual Flutter objects
+ *  collected  are serialized into maps
+ *  to whatever depth we find useful.  Observatory has expectations wrt to
+ *  this - it expects a type field for example.
+ */
+
+/* Future<Map<String, dynamic>>*/ debugReturnElementTree(
+    Map<String, String> parameters) async {
+  List<Map<String, dynamic>> stack = [
+    {'children': []}
+  ];
+
+  flutter.Element tree =
+      WidgetsBinding.instance.renderViewElement;
+// the root of the element tree
+
+  push(Map<String, dynamic> e) {
+    stack.add(e);
+  }
+
+  Map<String, dynamic> pop() {
+    return stack.removeLast();
+  }
+
+  Map<String, dynamic> top() {
+    return stack.last;
+  }
+
+  String mapType(Type t) => t.toString();
+
+  Map<String, dynamic> mapWidget(e) {
+    return {'type': mapType(e.runtimeType)};
+  }
+
+  Map<String, dynamic> mapRenderObject(e) {
+    return {'type': mapType(e.runtimeType)};
+  }
+
+  Map<String, dynamic> mapElement(e) {
+    return {
+      'type': mapType(e.runtimeType),
+      'widget': mapWidget(e.widget),
+      'isRenderElement': e is flutter.RenderObjectElement,
+      'renderObject': mapRenderObject(e.renderObject)
+    };
+  }
+
+  Map<String, dynamic> elementMap(flutter.Element e) {
+    return {'element': mapElement(e), 'children': []};
+  }
+
+  void elementCollector(flutter.Element e) {
+    var map = elementMap(e);
+    top()['children'].add(map);
+    push(map);
+    e.visitChildren(elementCollector);
+    pop();
+  }
+
+  tree.visitChildren(elementCollector);
+  return top();
 }
 
 /// A bridge from a [RenderObject] to an [Element] tree.

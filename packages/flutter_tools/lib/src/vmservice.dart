@@ -766,6 +766,10 @@ class Isolate extends ServiceObjectOwner {
 
   // Flutter extension methods.
 
+  Future<Map<String, dynamic>> flutterDebugReturnElementTree() {
+    return invokeRpcRaw('ext.flutter.debugReturnElementTree');
+  }
+
   Future<Map<String, dynamic>> flutterDebugDumpApp() {
     return invokeRpcRaw('ext.flutter.debugDumpApp');
   }
