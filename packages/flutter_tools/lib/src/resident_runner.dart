@@ -50,7 +50,7 @@ abstract class ResidentRunner {
     if (vmService != null)
       await vmService.vm.refreshViews();
 
-    await currentView.uiIsolate.flutterDebugReturnElementTree();
+    return await currentView.uiIsolate.flutterDebugReturnElementTree();
   }
 
   Future<Null> _debugDumpApp() async {
@@ -148,7 +148,7 @@ abstract class ResidentRunner {
       await _debugDumpRenderTree();
       return true;
     } else if (lower == 'f') {
-      await _debugReturnElementTree();
+      print (await _debugReturnElementTree());
       return true;
     } else if (lower == 'q' || character == AnsiTerminal.KEY_F10) {
       // F10, exit
