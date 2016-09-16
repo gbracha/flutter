@@ -393,7 +393,7 @@ void debugDumpApp() {
     {'children': []}
   ];
 
-  flutter.Element tree =
+  Element tree =
       WidgetsBinding.instance.renderViewElement;
 // the root of the element tree
 
@@ -423,16 +423,16 @@ void debugDumpApp() {
     return {
       'type': mapType(e.runtimeType),
       'widget': mapWidget(e.widget),
-      'isRenderElement': e is flutter.RenderObjectElement,
+      'isRenderElement': e is RenderObjectElement,
       'renderObject': mapRenderObject(e.renderObject)
     };
   }
 
-  Map<String, dynamic> elementMap(flutter.Element e) {
+  Map<String, dynamic> elementMap(Element e) {
     return {'element': mapElement(e), 'children': []};
   }
 
-  void elementCollector(flutter.Element e) {
+  void elementCollector(Element e) {
     var map = elementMap(e);
     top()['children'].add(map);
     push(map);
