@@ -46,6 +46,13 @@ abstract class ResidentRunner {
     return stopApp();
   }
 
+  Future<Map<String, dynamic>> _debugReturnElementTree() async {
+    if (vmService != null)
+      await vmService.vm.refreshViews();
+
+    await currentView.uiIsolate.flutterDebugReturnElementTree();
+  }
+
   Future<Null> _debugDumpApp() async {
     if (vmService != null)
       await vmService.vm.refreshViews();
