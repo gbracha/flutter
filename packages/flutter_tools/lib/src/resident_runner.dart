@@ -147,6 +147,9 @@ abstract class ResidentRunner {
     } else if (lower == 't') {
       await _debugDumpRenderTree();
       return true;
+    } else if (lower == 'f') {
+      await _debugReturnElementTree();
+      return true;
     } else if (lower == 'q' || character == AnsiTerminal.KEY_F10) {
       // F10, exit
       await stop();
