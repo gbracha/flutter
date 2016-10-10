@@ -24,11 +24,10 @@ import 'create_test.dart' as create_test;
 import 'daemon_test.dart' as daemon_test;
 import 'devfs_test.dart' as devfs_test;
 import 'device_test.dart' as device_test;
-// import 'devices_test.dart' as devices_test;
+import 'devices_test.dart' as devices_test;
 import 'drive_test.dart' as drive_test;
 import 'format_test.dart' as format_test;
 import 'install_test.dart' as install_test;
-import 'listen_test.dart' as listen_test;
 import 'logs_test.dart' as logs_test;
 import 'os_utils_test.dart' as os_utils_test;
 import 'packages_test.dart' as packages_test;
@@ -58,11 +57,10 @@ void main() {
   daemon_test.main();
   devfs_test.main();
   device_test.main();
-  // devices_test.main(); // https://github.com/flutter/flutter/issues/4480
+  devices_test.main();
   drive_test.main();
   format_test.main();
   install_test.main();
-  listen_test.main();
   logs_test.main();
   os_utils_test.main();
   packages_test.main();

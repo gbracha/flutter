@@ -53,6 +53,7 @@ enum _ScaffoldSlot {
   appBar,
   bottomSheet,
   snackBar,
+  bottomNavigationBar,
   floatingActionButton,
   drawer,
   statusBar,
@@ -80,13 +81,20 @@ class _ScaffoldLayout extends MultiChildLayoutDelegate {
 
     final BoxConstraints fullWidthConstraints = looseConstraints.tighten(width: size.width);
     double contentTop = padding.top;
-    double contentBottom = size.height - padding.bottom;
+    double bottom = size.height - padding.bottom;
+    double contentBottom = bottom;
 
     if (hasChild(_ScaffoldSlot.appBar)) {
       final double appBarHeight = layoutChild(_ScaffoldSlot.appBar, fullWidthConstraints).height;
       if (appBarBehavior == AppBarBehavior.anchor)
         contentTop = appBarHeight;
       positionChild(_ScaffoldSlot.appBar, Offset.zero);
+    }
+
+    if (hasChild(_ScaffoldSlot.bottomNavigationBar)) {
+      final double bottomNavigationBarHeight = layoutChild(_ScaffoldSlot.bottomNavigationBar, fullWidthConstraints).height;
+      contentBottom -= bottomNavigationBarHeight;
+      positionChild(_ScaffoldSlot.bottomNavigationBar, new Offset(0.0, contentBottom));
     }
 
     if (hasChild(_ScaffoldSlot.body)) {
@@ -97,7 +105,10 @@ class _ScaffoldLayout extends MultiChildLayoutDelegate {
     }
 
     // The BottomSheet and the SnackBar are anchored to the bottom of the parent,
-    // they're as wide as the parent and are given their intrinsic height.
+    // they're as wide as the parent and are given their intrinsic height. The
+    // only difference is that SnackBar appears on the top side of the
+    // BottomNavigationBar while the BottomSheet is stacked on top of it.
+    //
     // If all three elements are present then either the center of the FAB straddles
     // the top edge of the BottomSheet or the bottom of the FAB is
     // _kFloatingActionButtonMargin above the SnackBar, whichever puts the FAB
@@ -109,8 +120,8 @@ class _ScaffoldLayout extends MultiChildLayoutDelegate {
     Size snackBarSize = Size.zero;
 
     if (hasChild(_ScaffoldSlot.bottomSheet)) {
-      bottomSheetSize = layoutChild(_ScaffoldSlot.bottomSheet, fullWidthConstraints);
-      positionChild(_ScaffoldSlot.bottomSheet, new Offset((size.width - bottomSheetSize.width) / 2.0, contentBottom - bottomSheetSize.height));
+      bottomSheetSize = layoutChild(_ScaffoldSlot.bottomSheet, fullWidthConstraints.copyWith(maxHeight: contentBottom - contentTop));
+      positionChild(_ScaffoldSlot.bottomSheet, new Offset((size.width - bottomSheetSize.width) / 2.0, bottom - bottomSheetSize.height));
     }
 
     if (hasChild(_ScaffoldSlot.snackBar)) {
@@ -158,10 +169,9 @@ class _FloatingActionButtonTransition extends StatefulWidget {
   _FloatingActionButtonTransitionState createState() => new _FloatingActionButtonTransitionState();
 }
 
-class _FloatingActionButtonTransitionState extends State<_FloatingActionButtonTransition> {
-  final AnimationController _previousController = new AnimationController(duration: _kFloatingActionButtonSegue);
-  final AnimationController _currentController = new AnimationController(duration: _kFloatingActionButtonSegue);
-
+class _FloatingActionButtonTransitionState extends State<_FloatingActionButtonTransition> with TickerProviderStateMixin {
+  AnimationController _previousController;
+  AnimationController _currentController;
   CurvedAnimation _previousAnimation;
   CurvedAnimation _currentAnimation;
   Widget _previousChild;
@@ -169,21 +179,29 @@ class _FloatingActionButtonTransitionState extends State<_FloatingActionButtonTr
   @override
   void initState() {
     super.initState();
-    // If we start out with a child, have the child appear fully visible instead
-    // of animating in.
-    if (config.child != null)
-      _currentController.value = 1.0;
 
+    _previousController = new AnimationController(
+      duration: _kFloatingActionButtonSegue,
+      vsync: this,
+    )..addStatusListener(_handleAnimationStatusChanged);
     _previousAnimation = new CurvedAnimation(
       parent: _previousController,
       curve: Curves.easeIn
+    );
+
+    _currentController = new AnimationController(
+      duration: _kFloatingActionButtonSegue,
+      vsync: this,
     );
     _currentAnimation = new CurvedAnimation(
       parent: _currentController,
       curve: Curves.easeIn
     );
 
-    _previousController.addStatusListener(_handleAnimationStatusChanged);
+    // If we start out with a child, have the child appear fully visible instead
+    // of animating in.
+    if (config.child != null)
+      _currentController.value = 1.0;
   }
 
   @override
@@ -265,6 +283,7 @@ class _FloatingActionButtonTransitionState extends State<_FloatingActionButtonTr
 ///  * [AppBar]
 ///  * [FloatingActionButton]
 ///  * [Drawer]
+///  * [BottomNavigationBar]
 ///  * [SnackBar]
 ///  * [BottomSheet]
 ///  * [ScaffoldState]
@@ -281,6 +300,7 @@ class Scaffold extends StatefulWidget {
     this.body,
     this.floatingActionButton,
     this.drawer,
+    this.bottomNavigationBar,
     this.scrollableKey,
     this.appBarBehavior: AppBarBehavior.anchor,
     this.resizeToAvoidBottomPadding: true
@@ -305,6 +325,12 @@ class Scaffold extends StatefulWidget {
   ///
   /// Typically a [Drawer].
   final Widget drawer;
+
+  /// A bottom navigation bar to display at the bottom of the scaffold.
+  ///
+  /// Snack bars slide from underneath the botton navigation while bottom sheets
+  /// are stacked on top.
+  final Widget bottomNavigationBar;
 
   /// The key of the primary [Scrollable] widget in the [body].
   ///
@@ -338,7 +364,7 @@ class Scaffold extends StatefulWidget {
 ///
 /// Can display [SnackBar]s and [BottomSheet]s. Retrieve a [ScaffoldState] from
 /// the current [BuildContext] using [Scaffold.of].
-class ScaffoldState extends State<Scaffold> {
+class ScaffoldState extends State<Scaffold> with TickerProviderStateMixin {
 
   static final Object _kScaffoldStorageIdentifier = new Object();
 
@@ -382,7 +408,7 @@ class ScaffoldState extends State<Scaffold> {
   /// will be added to a queue and displayed after the earlier snack bars have
   /// closed.
   ScaffoldFeatureController<SnackBar, Null> showSnackBar(SnackBar snackbar) {
-    _snackBarController ??= SnackBar.createAnimationController()
+    _snackBarController ??= SnackBar.createAnimationController(vsync: this)
       ..addStatusListener(_handleSnackBarStatusChange);
     if (_snackBars.isEmpty) {
       assert(_snackBarController.isDismissed);
@@ -456,7 +482,7 @@ class ScaffoldState extends State<Scaffold> {
 
   // PERSISTENT BOTTOM SHEET API
 
-  final List<Widget> _dismissedBottomSheets = <Widget>[];
+  final List<_PersistentBottomSheet> _dismissedBottomSheets = <_PersistentBottomSheet>[];
   PersistentBottomSheetController<dynamic> _currentBottomSheet;
 
   /// Shows a persistent material design bottom sheet.
@@ -465,7 +491,7 @@ class ScaffoldState extends State<Scaffold> {
   /// content of the app. A persistent bottom sheet remains visible even when
   /// the user interacts with other parts of the app.
   ///
-  /// A closely related widget is  a modal bottom sheet, which is an alternative
+  /// A closely related widget is a modal bottom sheet, which is an alternative
   /// to a menu or a dialog and prevents the user from interacting with the rest
   /// of the app. Modal bottom sheets can be created and displayed with the
   /// [showModalBottomSheet] function.
@@ -485,7 +511,7 @@ class ScaffoldState extends State<Scaffold> {
     }
     Completer<dynamic/*=T*/> completer = new Completer<dynamic/*=T*/>();
     GlobalKey<_PersistentBottomSheetState> bottomSheetKey = new GlobalKey<_PersistentBottomSheetState>();
-    AnimationController controller = BottomSheet.createAnimationController()
+    AnimationController controller = BottomSheet.createAnimationController(this)
       ..forward();
     _PersistentBottomSheet bottomSheet;
     LocalHistoryEntry entry = new LocalHistoryEntry(
@@ -535,7 +561,7 @@ class ScaffoldState extends State<Scaffold> {
   @override
   void initState() {
     super.initState();
-    _appBarController = new AnimationController();
+    _appBarController = new AnimationController(vsync: this);
     // Use an explicit identifier to guard against the possibility that the
     // Scaffold's key is recreated by the Widget that creates the Scaffold.
     List<double> scrollValues = PageStorage.of(context)?.readState(context,
@@ -550,11 +576,15 @@ class ScaffoldState extends State<Scaffold> {
 
   @override
   void dispose() {
-    _appBarController.stop();
-    _snackBarController?.stop();
+    _appBarController.dispose();
+    _snackBarController?.dispose();
     _snackBarController = null;
     _snackBarTimer?.cancel();
     _snackBarTimer = null;
+    for (_PersistentBottomSheet bottomSheet in _dismissedBottomSheets)
+      bottomSheet.animationController.dispose();
+    if (_currentBottomSheet != null)
+      _currentBottomSheet._widget.animationController.dispose();
     PageStorage.of(context)?.writeState(context, <double>[_scrollOffset, _scrollOffsetDelta],
       identifier: _kScaffoldStorageIdentifier
     );
@@ -584,8 +614,19 @@ class ScaffoldState extends State<Scaffold> {
       } else {
         _shouldShowBackArrow ??= Navigator.canPop(context);
         if (_shouldShowBackArrow) {
+          IconData backIcon;
+          switch (Theme.of(context).platform) {
+            case TargetPlatform.android:
+            case TargetPlatform.fuchsia:
+              backIcon = Icons.arrow_back;
+              break;
+            case TargetPlatform.iOS:
+              backIcon = Icons.arrow_back_ios;
+              break;
+          }
+          assert(backIcon != null);
           leading = new IconButton(
-            icon: new Icon(Icons.arrow_back),
+            icon: new Icon(backIcon),
             alignment: FractionalOffset.centerLeft,
             onPressed: () => Navigator.pop(context),
             tooltip: 'Back' // TODO(ianh): Figure out how to localize this string
@@ -609,10 +650,9 @@ class ScaffoldState extends State<Scaffold> {
     if ((scrollable.config.scrollDirection == Axis.vertical) &&
         (config.scrollableKey == null || config.scrollableKey == scrollable.config.key)) {
       double newScrollOffset = scrollable.scrollOffset;
-      if (ClampOverscrolls.of(scrollable.context)) {
-        ExtentScrollBehavior limits = scrollable.scrollBehavior;
-        newScrollOffset = newScrollOffset.clamp(limits.minScrollOffset, limits.maxScrollOffset);
-      }
+      final ClampOverscrolls clampOverscrolls = ClampOverscrolls.of(context);
+      if (clampOverscrolls != null)
+        newScrollOffset = clampOverscrolls.clampScrollOffset(scrollable);
       if (_scrollOffset != newScrollOffset) {
         setState(() {
           _scrollOffsetDelta = _scrollOffset - newScrollOffset;
@@ -760,7 +800,18 @@ class ScaffoldState extends State<Scaffold> {
     } else {
       children.add(new LayoutId(child: _buildScrollableAppBar(context, padding), id: _ScaffoldSlot.appBar));
     }
-    // Otherwise the AppBar will be part of a [app bar, body] Stack. See AppBarBehavior.scroll below.
+    // Otherwise the AppBar will be part of a [app bar, body] Stack. See
+    // AppBarBehavior.scroll below.
+
+    if (_snackBars.isNotEmpty)
+      _addIfNonNull(children, _snackBars.first._widget, _ScaffoldSlot.snackBar);
+
+    if (config.bottomNavigationBar != null) {
+      children.add(new LayoutId(
+        id: _ScaffoldSlot.bottomNavigationBar,
+        child: config.bottomNavigationBar
+      ));
+    }
 
     if (_currentBottomSheet != null || _dismissedBottomSheets.isNotEmpty) {
       final List<Widget> bottomSheets = <Widget>[];
@@ -774,9 +825,6 @@ class ScaffoldState extends State<Scaffold> {
       );
       _addIfNonNull(children, stack, _ScaffoldSlot.bottomSheet);
     }
-
-    if (_snackBars.isNotEmpty)
-      _addIfNonNull(children, _snackBars.first._widget, _ScaffoldSlot.snackBar);
 
     children.add(new LayoutId(
       id: _ScaffoldSlot.floatingActionButton,

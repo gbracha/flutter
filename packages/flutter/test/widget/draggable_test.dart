@@ -315,15 +315,17 @@ void main() {
             }
           ),
           new Container(height: 400.0),
-          new HorizontalDraggable<int>(
+          new Draggable<int>(
             data: 1,
             child: new Text('H'),
-            feedback: new Text('Dragging')
+            feedback: new Text('Dragging'),
+            affinity: Axis.horizontal,
           ),
-          new VerticalDraggable<int>(
+          new Draggable<int>(
             data: 2,
             child: new Text('V'),
-            feedback: new Text('Dragging')
+            feedback: new Text('Dragging'),
+            affinity: Axis.vertical,
           ),
           new Container(height: 500.0),
           new Container(height: 500.0),
@@ -420,15 +422,17 @@ void main() {
             }
           ),
           new Container(width: 400.0),
-          new HorizontalDraggable<int>(
+          new Draggable<int>(
             data: 1,
             child: new Text('H'),
-            feedback: new Text('Dragging')
+            feedback: new Text('Dragging'),
+            affinity: Axis.horizontal,
           ),
-          new VerticalDraggable<int>(
+          new Draggable<int>(
             data: 2,
             child: new Text('V'),
-            feedback: new Text('Dragging')
+            feedback: new Text('Dragging'),
+            affinity: Axis.vertical,
           ),
           new Container(width: 500.0),
           new Container(width: 500.0),
@@ -909,6 +913,7 @@ void main() {
     expect(didTap, isFalse);
   });
 
+  // Regression test for https://github.com/flutter/flutter/issues/6128.
   testWidgets('Draggable plays nice with onTap', (WidgetTester tester) async {
     await tester.pumpWidget(new Overlay(
       initialEntries: <OverlayEntry>[
@@ -939,6 +944,65 @@ void main() {
 
     await firstGesture.moveBy(new Offset(100.0, 0.0));
     await secondGesture.up();
+  });
+
+  testWidgets('DragTarget does not set state when remove from the tree', (WidgetTester tester) async {
+    List<String> events = <String>[];
+    Point firstLocation, secondLocation;
+
+    await tester.pumpWidget(new MaterialApp(
+      home: new Column(
+        children: <Widget>[
+          new Draggable<int>(
+            data: 1,
+            child: new Text('Source'),
+            feedback: new Text('Dragging')
+          ),
+          new DragTarget<int>(
+            builder: (BuildContext context, List<int> data, List<dynamic> rejects) {
+              return new Text('Target');
+            },
+            onAccept: (int data) {
+              events.add('drop');
+            }
+          ),
+        ]
+      )
+    ));
+
+    expect(events, isEmpty);
+    expect(find.text('Source'), findsOneWidget);
+    expect(find.text('Target'), findsOneWidget);
+
+    expect(events, isEmpty);
+    await tester.tap(find.text('Source'));
+    expect(events, isEmpty);
+
+    firstLocation = tester.getCenter(find.text('Source'));
+    TestGesture gesture = await tester.startGesture(firstLocation, pointer: 7);
+    await tester.pump();
+
+    await tester.pump(const Duration(seconds: 20));
+
+    secondLocation = tester.getCenter(find.text('Target'));
+    await gesture.moveTo(secondLocation);
+    await tester.pump();
+
+    await tester.pumpWidget(new MaterialApp(
+      home: new Column(
+        children: <Widget>[
+          new Draggable<int>(
+            data: 1,
+            child: new Text('Source'),
+            feedback: new Text('Dragging')
+          ),
+        ]
+      )
+    ));
+
+    expect(events, isEmpty);
+    await gesture.up();
+    await tester.pump();
   });
 }
 

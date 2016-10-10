@@ -37,10 +37,9 @@ const Duration _kTabBarScroll = const Duration(milliseconds: 200);
 const Curve _kTabIndicatorLeadingCurve = Curves.easeOut;
 const Curve _kTabIndicatorTrailingCurve = Curves.easeIn;
 
-// The scrollOffset (velocity) provided to fling() is pixels/ms, and the
-// tolerance velocity is pixels/sec. The additional factor of 5 is to further
-// increase sensitivity to swipe gestures and was determined "experimentally".
-final double _kMinFlingVelocity = kPixelScrollTolerance.velocity / 5000.0;
+// The additional factor of 5 is to further increase sensitivity to swipe
+// gestures and was determined "experimentally".
+final double _kMinFlingVelocity = kPixelScrollTolerance.velocity / 5.0;
 
 class _TabBarParentData extends ContainerBoxParentDataMixin<RenderBox> { }
 
@@ -524,26 +523,27 @@ class TabBarSelection<T> extends StatefulWidget {
 ///
 /// Subclasses of [TabBarSelection] typically use [State] objects that extend
 /// this class.
-class TabBarSelectionState<T> extends State<TabBarSelection<T>> {
+class TabBarSelectionState<T> extends State<TabBarSelection<T>> with SingleTickerProviderStateMixin {
+
+  // Both the TabBar and TabBarView classes access _controller because they
+  // alternately drive selection progress between tabs.
+  AnimationController _controller;
 
   /// An animation that updates as the selected tab changes.
   Animation<double> get animation => _controller.view;
 
-  // Both the TabBar and TabBarView classes access _controller because they
-  // alternately drive selection progress between tabs.
-  final AnimationController _controller = new AnimationController(duration: _kTabBarScroll, value: 1.0);
   final Map<T, int> _valueToIndex = new Map<T, int>();
-
-  void _initValueToIndex() {
-    _valueToIndex.clear();
-    int index = 0;
-    for(T value in values)
-      _valueToIndex[value] = index++;
-  }
 
   @override
   void initState() {
     super.initState();
+
+    _controller = new AnimationController(
+      duration: _kTabBarScroll,
+      value: 1.0,
+      vsync: this,
+    );
+
     _value = config.value ?? PageStorage.of(context)?.readState(context) ?? values.first;
 
     // If the selection's values have changed since the selected value was saved with
@@ -560,6 +560,13 @@ class TabBarSelectionState<T> extends State<TabBarSelection<T>> {
     super.didUpdateConfig(oldConfig);
     if (values != oldConfig.values)
       _initValueToIndex();
+  }
+
+  void _initValueToIndex() {
+    _valueToIndex.clear();
+    int index = 0;
+    for (T value in values)
+      _valueToIndex[value] = index++;
   }
 
   void _writeValue() {
@@ -649,8 +656,8 @@ class TabBarSelectionState<T> extends State<TabBarSelection<T>> {
 
   /// Calls listener methods every time the value or status of the selection animation changes.
   ///
-  /// Listeners can be removed with [unregisterAnimationListener].
-  void registerAnimationListener(TabBarSelectionAnimationListener listener) {
+  /// Listeners can be removed with [removeAnimationListener].
+  void addAnimationListener(TabBarSelectionAnimationListener listener) {
     _animationListeners.add(listener);
     _controller
       ..addStatusListener(listener.handleStatusChange)
@@ -659,8 +666,8 @@ class TabBarSelectionState<T> extends State<TabBarSelection<T>> {
 
   /// Stop calling listener methods every time the value or status of the animation changes.
   ///
-  /// Listeners can be added with [registerAnimationListener].
-  void unregisterAnimationListener(TabBarSelectionAnimationListener listener) {
+  /// Listeners can be added with [addAnimationListener].
+  void removeAnimationListener(TabBarSelectionAnimationListener listener) {
     _animationListeners.remove(listener);
     _controller
       ..removeStatusListener(listener.handleStatusChange)
@@ -672,7 +679,7 @@ class TabBarSelectionState<T> extends State<TabBarSelection<T>> {
     _controller.stop();
     for (TabBarSelectionAnimationListener listener in _animationListeners.toList()) {
       listener.handleSelectionDeactivate();
-      unregisterAnimationListener(listener);
+      removeAnimationListener(listener);
     }
     assert(_animationListeners.isEmpty);
     _writeValue();
@@ -772,9 +779,9 @@ class _TabBarState<T> extends ScrollableState<TabBar<T>> implements TabBarSelect
   void _initSelection(TabBarSelectionState<T> newSelection) {
     if (_selection == newSelection)
       return;
-    _selection?.unregisterAnimationListener(this);
+    _selection?.removeAnimationListener(this);
     _selection = newSelection;
-    _selection?.registerAnimationListener(this);
+    _selection?.addAnimationListener(this);
     if (_selection != null)
       _lastSelectedIndex = _selection.index;
   }
@@ -791,7 +798,7 @@ class _TabBarState<T> extends ScrollableState<TabBar<T>> implements TabBarSelect
 
   @override
   void dispose() {
-    _selection?.unregisterAnimationListener(this);
+    _selection?.removeAnimationListener(this);
     super.dispose();
   }
 
@@ -918,7 +925,7 @@ class _TabBarState<T> extends ScrollableState<TabBar<T>> implements TabBarSelect
   }
 
   @override
-  ScrollBehavior<double, double> createScrollBehavior() {
+  ExtentScrollBehavior createScrollBehavior() {
     return new _TabsScrollBehavior()
       ..isScrollable = config.isScrollable;
   }
@@ -1110,9 +1117,9 @@ class _TabBarViewState<T> extends PageableListState<TabBarView<T>> implements Ta
   void _initSelection(TabBarSelectionState<T> newSelection) {
     if (_selection == newSelection)
       return;
-    _selection?.unregisterAnimationListener(this);
+    _selection?.removeAnimationListener(this);
     _selection = newSelection;
-    _selection?.registerAnimationListener(this);
+    _selection?.addAnimationListener(this);
     if (_selection != null)
       _updateItemsAndScrollBehavior();
   }
@@ -1126,7 +1133,7 @@ class _TabBarViewState<T> extends PageableListState<TabBarView<T>> implements Ta
 
   @override
   void dispose() {
-    _selection?.unregisterAnimationListener(this);
+    _selection?.removeAnimationListener(this);
     super.dispose();
   }
 

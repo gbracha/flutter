@@ -271,7 +271,7 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
   /// sent to the GPU.
   ///
   /// 7. The semantics phase: All the dirty [RenderObject]s in the system have
-  /// their semantics updated (see [RenderObject.semanticAnnotator]). This
+  /// their semantics updated (see [RenderObject.SemanticsAnnotator]). This
   /// generates the [SemanticsNode] tree. See
   /// [RenderObject.markNeedsSemanticsUpdate] for further details on marking an
   /// object dirty for semantics.
@@ -296,7 +296,8 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
       return true;
     });
     try {
-      buildOwner.buildScope(renderViewElement);
+      if (renderViewElement != null)
+        buildOwner.buildScope(renderViewElement);
       super.beginFrame();
       buildOwner.finalizeTree();
     } finally {
@@ -343,12 +344,18 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
   void reassembleApplication() {
     _needToReportFirstFrame = true;
     preventThisFrameFromBeingReportedAsFirstFrame();
-    buildOwner.reassemble(renderViewElement);
+    if (renderViewElement != null)
+      buildOwner.reassemble(renderViewElement);
     super.reassembleApplication();
   }
 }
 
 /// Inflate the given widget and attach it to the screen.
+///
+/// The widget is given constraints during layout that force it to fill the
+/// entire screen. If you wish to align your widget to one side of the screen
+/// (e.g., the top), consider using the [Align] widget. If you wish to center
+/// your widget, you can also use the [Center] widget
 ///
 /// Initializes the binding using [WidgetsFlutterBinding] if necessary.
 ///
@@ -537,6 +544,12 @@ class RenderObjectToWidgetElement<T extends RenderObject> extends RootRenderObje
   void visitChildren(ElementVisitor visitor) {
     if (_child != null)
       visitor(_child);
+  }
+
+  @override
+  void detachChild(Element child) {
+    assert(child == _child);
+    _child = null;
   }
 
   @override

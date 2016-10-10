@@ -8,10 +8,12 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/http.dart' as http;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 import 'package:quiver/testing/async.dart';
 import 'package:quiver/time.dart';
 import 'package:test/test.dart' as test_package;
@@ -109,6 +111,13 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
   @override
   void initInstances() {
     timeDilation = 1.0; // just in case the developer has artificially changed it for development
+    http.Client.clientOverride = () {
+      return new http.MockClient((http.Request request){
+        return new Future<http.Response>.value(
+          new http.Response("Mocked: Unavailable.", 404, request: request)
+        );
+      });
+    };
     super.initInstances();
   }
 
@@ -218,14 +227,17 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
   /// test failures.
   bool showAppDumpInErrors = false;
 
-  /// Call the callback inside a [FakeAsync] scope on which [pump] can
+  /// Call the testBody inside a [FakeAsync] scope on which [pump] can
   /// advance time.
   ///
   /// Returns a future which completes when the test has run.
   ///
   /// Called by the [testWidgets] and [benchmarkWidgets] functions to
   /// run a test.
-  Future<Null> runTest(Future<Null> callback());
+  ///
+  /// The `invariantTester` argument is called after the `testBody`'s [Future]
+  /// completes. If it throws, then the test is marked as failed.
+  Future<Null> runTest(Future<Null> testBody(), VoidCallback invariantTester);
 
   /// This is called during test execution before and after the body has been
   /// executed.
@@ -258,7 +270,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
       _currentTestCompleter.complete(null);
   }
 
-  Future<Null> _runTest(Future<Null> callback()) {
+  Future<Null> _runTest(Future<Null> testBody(), VoidCallback invariantTester) {
     assert(inTest);
     _oldExceptionHandler = FlutterError.onError;
     int _exceptionCount = 0; // number of un-taken exceptions
@@ -349,20 +361,20 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
     );
     _parentZone = Zone.current;
     Zone testZone = _parentZone.fork(specification: errorHandlingZoneSpecification);
-    testZone.runUnaryGuarded(_runTestBody, callback)
+    testZone.runBinaryGuarded(_runTestBody, testBody, invariantTester)
       .whenComplete(_testCompletionHandler);
     asyncBarrier(); // When using AutomatedTestWidgetsFlutterBinding, this flushes the microtasks.
     return _currentTestCompleter.future;
   }
 
-  Future<Null> _runTestBody(Future<Null> callback()) async {
+  Future<Null> _runTestBody(Future<Null> testBody(), VoidCallback invariantTester) async {
     assert(inTest);
 
     runApp(new Container(key: new UniqueKey(), child: _kPreTestMessage)); // Reset the tree to a known state.
     await pump();
 
     // run the test
-    await callback();
+    await testBody();
     asyncBarrier(); // drains the microtasks in `flutter test` mode (when using AutomatedTestWidgetsFlutterBinding)
 
     if (_pendingExceptionDetails == null) {
@@ -371,6 +383,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
       // alone so that we don't cause more spurious errors.
       runApp(new Container(key: new UniqueKey(), child: _kPostTestMessage)); // Unmount any remaining widgets.
       await pump();
+      invariantTester();
       _verifyInvariants();
     }
 
@@ -481,24 +494,24 @@ class AutomatedTestWidgetsFlutterBinding extends TestWidgetsFlutterBinding {
   }
 
   @override
-  Future<Null> runTest(Future<Null> callback()) {
+  Future<Null> runTest(Future<Null> testBody(), VoidCallback invariantTester) {
     assert(!inTest);
     assert(_fakeAsync == null);
     assert(_clock == null);
     _fakeAsync = new FakeAsync();
     _clock = _fakeAsync.getClock(new DateTime.utc(2015, 1, 1));
-    Future<Null> callbackResult;
+    Future<Null> testBodyResult;
     _fakeAsync.run((FakeAsync fakeAsync) {
       assert(fakeAsync == _fakeAsync);
-      callbackResult = _runTest(callback);
+      testBodyResult = _runTest(testBody, invariantTester);
       assert(inTest);
     });
-    // callbackResult is a Future that was created in the Zone of the fakeAsync.
+    // testBodyResult is a Future that was created in the Zone of the fakeAsync.
     // This means that if we call .then() on it (as the test framework is about to),
     // it will register a microtask to handle the future _in the fake async zone_.
     // To avoid this, we wrap it in a Future that we've created _outside_ the fake
     // async zone.
-    return new Future<Null>.value(callbackResult);
+    return new Future<Null>.value(testBodyResult);
   }
 
   @override
@@ -678,10 +691,10 @@ class LiveTestWidgetsFlutterBinding extends TestWidgetsFlutterBinding {
   }
 
   @override
-  Future<Null> runTest(Future<Null> callback()) async {
+  Future<Null> runTest(Future<Null> testBody(), VoidCallback invariantTester) async {
     assert(!inTest);
     _inTest = true;
-    return _runTest(callback);
+    return _runTest(testBody, invariantTester);
   }
 
   @override
@@ -724,8 +737,8 @@ class TestViewConfiguration extends ViewConfiguration {
       super(size: size);
 
   static Matrix4 _getMatrix(Size size, double devicePixelRatio) {
-    final double actualWidth = ui.window.size.width * devicePixelRatio;
-    final double actualHeight = ui.window.size.height * devicePixelRatio;
+    final double actualWidth = ui.window.physicalSize.width;
+    final double actualHeight = ui.window.physicalSize.height;
     final double desiredWidth = size.width;
     final double desiredHeight = size.height;
     double scale, shiftX, shiftY;
@@ -791,7 +804,7 @@ class _LiveTestRenderView extends RenderView {
   @override
   TestViewConfiguration get configuration => super.configuration;
   @override
-  set configuration(TestViewConfiguration value) { super.configuration = value; }
+  set configuration(@checked TestViewConfiguration value) { super.configuration = value; }
 
   final Map<int, _LiveTestPointerRecord> _pointers = <int, _LiveTestPointerRecord>{};
 

@@ -153,7 +153,7 @@ class DataCell {
   /// Creates an object to hold the data for a cell in a [DataTable].
   ///
   /// The first argument is the widget to show for the cell, typically
-  /// a [Text] or [DropDownButton] widget; this becomes the [widget]
+  /// a [Text] or [DropdownButton] widget; this becomes the [widget]
   /// property and must not be null.
   ///
   /// If the cell has no data, then a [Text] widget with placeholder
@@ -170,7 +170,7 @@ class DataCell {
 
   /// The data for the row.
   ///
-  /// Typically a [Text] widget or a [DropDownButton] widget.
+  /// Typically a [Text] widget or a [DropdownButton] widget.
   ///
   /// If the cell has no data, then a [Text] widget with placeholder
   /// text should be provided instead, and [placeholder] should be set
@@ -406,7 +406,7 @@ class DataTable extends StatelessWidget {
     label = new Container(
       padding: padding,
       height: _kHeadingRowHeight,
-      align: new FractionalOffset(numeric ? 1.0 : 0.0, 0.5), // TODO(ianh): RTL for non-numeric
+      alignment: new FractionalOffset(numeric ? 1.0 : 0.0, 0.5), // TODO(ianh): RTL for non-numeric
       child: new AnimatedDefaultTextStyle(
         style: new TextStyle(
           // TODO(ianh): font family should be Roboto; see https://github.com/flutter/flutter/issues/3116
@@ -456,7 +456,7 @@ class DataTable extends StatelessWidget {
     label = new Container(
       padding: padding,
       height: _kDataRowHeight,
-      align: new FractionalOffset(numeric ? 1.0 : 0.0, 0.5), // TODO(ianh): RTL for non-numeric
+      alignment: new FractionalOffset(numeric ? 1.0 : 0.0, 0.5), // TODO(ianh): RTL for non-numeric
       child: new DefaultTextStyle(
         style: new TextStyle(
           // TODO(ianh): font family should be Roboto; see https://github.com/flutter/flutter/issues/3116
@@ -470,7 +470,7 @@ class DataTable extends StatelessWidget {
           data: new IconThemeData(
             color: isLightTheme ? Colors.black54 : Colors.white70
           ),
-          child: new DropDownButtonHideUnderline(child: label)
+          child: new DropdownButtonHideUnderline(child: label)
         )
       )
     );
@@ -675,7 +675,7 @@ class _SortArrow extends StatefulWidget {
   _SortArrowState createState() => new _SortArrowState();
 }
 
-class _SortArrowState extends State<_SortArrow> {
+class _SortArrowState extends State<_SortArrow> with TickerProviderStateMixin {
 
   AnimationController _opacityController;
   Animation<double> _opacityAnimation;
@@ -691,7 +691,8 @@ class _SortArrowState extends State<_SortArrow> {
     super.initState();
     _opacityAnimation = new CurvedAnimation(
       parent: _opacityController = new AnimationController(
-        duration: config.duration
+        duration: config.duration,
+        vsync: this,
       ),
       curve: Curves.fastOutSlowIn
     )
@@ -702,7 +703,8 @@ class _SortArrowState extends State<_SortArrow> {
       end: math.PI
     ).animate(new CurvedAnimation(
       parent: _orientationController = new AnimationController(
-        duration: config.duration
+        duration: config.duration,
+        vsync: this,
       ),
       curve: Curves.easeIn
     ))

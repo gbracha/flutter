@@ -9,6 +9,7 @@ import 'dart:io';
 import '../android/android_device.dart';
 import '../base/context.dart';
 import '../base/logger.dart';
+import '../base/utils.dart';
 import '../build_info.dart';
 import '../cache.dart';
 import '../device.dart';
@@ -38,13 +39,10 @@ class DaemonCommand extends FlutterCommand {
   final String description = 'Run a persistent, JSON-RPC based server to communicate with devices.';
 
   @override
-  bool get requiresProjectRoot => false;
-
-  @override
   final bool hidden;
 
   @override
-  Future<int> runInProject() {
+  Future<int> runCommand() {
     printStatus('Starting device daemon...');
 
     AppContext appContext = new AppContext();
@@ -100,7 +98,10 @@ class Daemon {
     // Start listening.
     commandStream.listen(
       (Map<String, dynamic> request) => _handleRequest(request),
-      onDone: () => _onExitCompleter.complete(0)
+      onDone: () {
+        if (!_onExitCompleter.isCompleted)
+            _onExitCompleter.complete(0);
+      }
     );
   }
 
@@ -280,9 +281,9 @@ class AppDomain extends Domain {
     registerHandler('discover', discover);
   }
 
-  static int _nextAppId = 0;
+  static Uuid _uuidGenerator = new Uuid();
 
-  static String _getNextAppId() => 'app-${_nextAppId++}';
+  static String _getNewAppId() => _uuidGenerator.generateV4();
 
   List<AppInstance> _apps = <AppInstance>[];
 
@@ -293,9 +294,9 @@ class AppDomain extends Domain {
     String route = _getStringArg(args, 'route');
     String mode = _getStringArg(args, 'mode');
     String target = _getStringArg(args, 'target');
-    bool hotMode = _getBoolArg(args, 'hot') ?? false;
+    bool enableHotReload = _getBoolArg(args, 'hot') ?? kHotReloadDefault;
 
-    Device device = daemon.deviceDomain._getDevice(deviceId);
+    Device device = daemon.deviceDomain._getOrLocateDevice(deviceId);
     if (device == null)
       throw "device '$deviceId' not found";
 
@@ -323,7 +324,7 @@ class AppDomain extends Domain {
 
     ResidentRunner runner;
 
-    if (hotMode) {
+    if (enableHotReload) {
       runner = new HotRunner(
         device,
         target: target,
@@ -339,9 +340,9 @@ class AppDomain extends Domain {
       );
     }
 
-    bool supportsRestart = hotMode ? device.supportsHotMode : device.supportsRestart;
+    bool supportsRestart = enableHotReload ? device.supportsHotMode : device.supportsRestart;
 
-    AppInstance app = new AppInstance(_getNextAppId(), runner);
+    AppInstance app = new AppInstance(_getNewAppId(), runner);
     _apps.add(app);
     _sendAppEvent(app, 'start', <String, dynamic>{
       'deviceId': deviceId,
@@ -536,13 +537,33 @@ class DeviceDomain extends Domain {
     }).toList();
     return devices.firstWhere((Device device) => device.id == deviceId, orElse: () => null);
   }
+
+  /// Return a known matching device, or scan for devices if no known match is found.
+  Device _getOrLocateDevice(String deviceId) {
+    // Look for an already known device.
+    Device device = _getDevice(deviceId);
+    if (device != null)
+      return device;
+
+    // Scan the different device providers for a match.
+    for (PollingDeviceDiscovery discoverer in _discoverers) {
+      List<Device> devices = discoverer.pollingGetDevices();
+      for (Device device in devices)
+        if (device.id == deviceId)
+          return device;
+    }
+
+    // No match found.
+    return null;
+  }
 }
 
-Map<String, String> _deviceToMap(Device device) {
-  return <String, String>{
+Map<String, dynamic> _deviceToMap(Device device) {
+  return <String, dynamic>{
     'id': device.id,
     'name': device.name,
-    'platform': getNameForTargetPlatform(device.platform)
+    'platform': getNameForTargetPlatform(device.platform),
+    'emulator': device.isLocalEmulator
   };
 }
 
@@ -578,6 +599,10 @@ class NotifyingLogger extends Logger {
   Status startProgress(String message) {
     printStatus(message);
     return new Status();
+  }
+
+  void dispose() {
+    _messageController.close();
   }
 }
 

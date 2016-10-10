@@ -8,7 +8,6 @@ import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
-import 'base/logger.dart';
 import 'build_info.dart';
 import 'dart/package_map.dart';
 import 'asset.dart';
@@ -30,7 +29,7 @@ class DevFSEntry {
   final AssetBundleEntry bundleEntry;
   String get assetPath => bundleEntry.archivePath;
 
-  final File file;
+  final FileSystemEntity file;
   FileStat _fileStat;
   // When we scanned for files, did this still exist?
   bool _exists = false;
@@ -69,15 +68,29 @@ class DevFSEntry {
     if (_isSourceEntry)
       return;
     _fileStat = file.statSync();
+    if (_fileStat.type == FileSystemEntityType.LINK) {
+      // Stat the link target.
+      String resolved = file.resolveSymbolicLinksSync();
+      _fileStat = FileStat.statSync(resolved);
+    }
   }
 
   bool get _isSourceEntry => file == null;
 
   bool get _isAssetEntry => bundleEntry != null;
 
+  File _getFile() {
+    if (file is Link) {
+      // The link target.
+      return new File(file.resolveSymbolicLinksSync());
+    }
+    return file;
+  }
+
   Future<List<int>> contentsAsBytes() async {
     if (_isSourceEntry)
       return bundleEntry.contentsAsBytes();
+    final File file = _getFile();
     return file.readAsBytes();
   }
 
@@ -86,6 +99,7 @@ class DevFSEntry {
       return new Stream<List<int>>.fromIterable(
           <List<int>>[bundleEntry.contentsAsBytes()]);
     }
+    final File file = _getFile();
     return file.openRead();
   }
 
@@ -292,15 +306,13 @@ class DevFS {
                            Set<String> fileFilter}) async {
     _reset();
     printTrace('DevFS: Starting sync from $rootDirectory');
-    Status status;
-    status = logger.startProgress('Scanning project files...');
+    logger.printTrace('Scanning project files');
     Directory directory = rootDirectory;
     await _scanDirectory(directory,
                          recursive: true,
                          fileFilter: fileFilter);
-    status.stop(showElapsedTime: true);
 
-    status = logger.startProgress('Scanning package files...');
+    printTrace('Scanning package files');
     String packagesFilePath = path.join(rootDirectory.path, kPackagesFileName);
     StringBuffer sb;
     if (FileSystemEntity.isFileSync(packagesFilePath)) {
@@ -331,9 +343,8 @@ class DevFS {
         }
       }
     }
-    status.stop(showElapsedTime: true);
     if (bundle != null) {
-      status = logger.startProgress('Scanning asset files...');
+      printTrace('Scanning asset files');
       // Synchronize asset bundle.
       for (AssetBundleEntry entry in bundle.entries) {
         // We write the assets into the AssetBundle working dir so that they
@@ -342,10 +353,9 @@ class DevFS {
             path.join(getAssetBuildDirectory(), entry.archivePath);
         _scanBundleEntry(devicePath, entry, bundleDirty);
       }
-      status.stop(showElapsedTime: true);
     }
     // Handle deletions.
-    status = logger.startProgress('Scanning for deleted files...');
+    printTrace('Scanning for deleted files');
     final List<String> toRemove = new List<String>();
     _entries.forEach((String path, DevFSEntry entry) {
       if (!entry._exists) {
@@ -356,10 +366,9 @@ class DevFS {
     for (int i = 0; i < toRemove.length; i++) {
       _entries.remove(toRemove[i]);
     }
-    status.stop(showElapsedTime: true);
 
     if (_deletedEntries.length > 0) {
-      status = logger.startProgress('Removing deleted files...');
+      printTrace('Removing deleted files');
       for (DevFSEntry entry in _deletedEntries) {
         Future<Map<String, dynamic>> operation =
             _operations.deleteFile(fsName, entry);
@@ -369,13 +378,10 @@ class DevFS {
       await Future.wait(_pendingOperations);
       _pendingOperations.clear();
       _deletedEntries.clear();
-      status.stop(showElapsedTime: true);
-    } else {
-      printStatus("No files to remove.");
     }
 
     if (_dirtyEntries.length > 0) {
-      status = logger.startProgress('Updating files...');
+      printTrace('Updating files');
       if (_httpWriter != null) {
         try {
           await _httpWriter.write(_dirtyEntries,
@@ -403,9 +409,6 @@ class DevFS {
         _pendingOperations.clear();
       }
       _dirtyEntries.clear();
-      status.stop(showElapsedTime: true);
-    } else {
-      printStatus("No files to update.");
     }
 
     if (sb != null)
@@ -417,7 +420,7 @@ class DevFS {
     logger.flush();
   }
 
-  void _scanFile(String devicePath, File file) {
+  void _scanFile(String devicePath, FileSystemEntity file) {
     DevFSEntry entry = _entries[devicePath];
     if (entry == null) {
       // New file.
@@ -485,10 +488,20 @@ class DevFS {
       Stream<FileSystemEntity> files =
           directory.list(recursive: recursive, followLinks: false);
       await for (FileSystemEntity file in files) {
-        if (file is! File) {
+        if (file is Link) {
+          final String linkPath = file.resolveSymbolicLinksSync();
+          final FileSystemEntityType linkType =
+              FileStat.statSync(linkPath).type;
+          if (linkType == FileSystemEntityType.DIRECTORY) {
+            // Skip links to directories.
+            continue;
+          }
+        }
+        if (file is Directory) {
           // Skip non-files.
           continue;
         }
+        assert((file is Link) || (file is File));
         if (ignoreDotFiles && path.basename(file.path).startsWith('.')) {
           // Skip dot files.
           continue;

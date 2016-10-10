@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:meta/meta.dart';
 
 import 'basic.dart';
@@ -38,15 +39,6 @@ enum TextSelectionHandleType {
   collapsed,
 }
 
-/// Builds a selection handle of the given type.
-typedef Widget TextSelectionHandleBuilder(BuildContext context, TextSelectionHandleType type);
-
-/// Builds a tool bar near a text selection.
-///
-/// Typically displays buttons for copying and pasting text.
-// TODO(mpcomplete): A single position is probably insufficient.
-typedef Widget TextSelectionToolbarBuilder(BuildContext context, Point position, TextSelectionDelegate delegate);
-
 /// The text position that a give selection handle manipulates. Dragging the
 /// [start] handle always moves the [start]/[baseOffset] of the selection.
 enum _TextSelectionHandlePosition { start, end }
@@ -64,6 +56,22 @@ abstract class TextSelectionDelegate {
   void hideToolbar();
 }
 
+// An interface for building the selection UI, to be provided by the
+// implementor of the toolbar widget.
+abstract class TextSelectionControls {
+  /// Builds a selection handle of the given type.
+  Widget buildHandle(BuildContext context, TextSelectionHandleType type);
+
+  /// Builds a toolbar near a text selection.
+  ///
+  /// Typically displays buttons for copying and pasting text.
+  // TODO(mpcomplete): A single position is probably insufficient.
+  Widget buildToolbar(BuildContext context, Point position, TextSelectionDelegate delegate);
+
+  /// Returns the size of the selection handle.
+  Size get handleSize;
+}
+
 /// An object that manages a pair of text selection handles.
 ///
 /// The selection handles are displayed in the [Overlay] that most closely
@@ -78,10 +86,13 @@ class TextSelectionOverlay implements TextSelectionDelegate {
     this.debugRequiredFor,
     this.renderObject,
     this.onSelectionOverlayChanged,
-    this.handleBuilder,
-    this.toolbarBuilder
+    this.selectionControls,
   }): _input = input {
     assert(context != null);
+    final OverlayState overlay = Overlay.of(context);
+    assert(overlay != null);
+    _handleController = new AnimationController(duration: _kFadeDuration, vsync: overlay);
+    _toolbarController = new AnimationController(duration: _kFadeDuration, vsync: overlay);
   }
 
   /// The context in which the selection handles should appear.
@@ -104,21 +115,13 @@ class TextSelectionOverlay implements TextSelectionDelegate {
   /// will be called with a new input value with an updated selection.
   final ValueChanged<InputValue> onSelectionOverlayChanged;
 
-  /// Builds the selection handles.
-  ///
-  /// The selection handles let the user adjust which portion of the text is
-  /// selected.
-  final TextSelectionHandleBuilder handleBuilder;
-
-  /// Builds a tool bar to display near the selection.
-  ///
-  /// The tool bar typically contains buttons for copying and pasting text.
-  final TextSelectionToolbarBuilder toolbarBuilder;
+  /// Builds text selection handles and toolbar.
+  final TextSelectionControls selectionControls;
 
   /// Controls the fade-in animations.
   static const Duration _kFadeDuration = const Duration(milliseconds: 150);
-  final AnimationController _handleController = new AnimationController(duration: _kFadeDuration);
-  final AnimationController _toolbarController = new AnimationController(duration: _kFadeDuration);
+  AnimationController _handleController;
+  AnimationController _toolbarController;
   Animation<double> get _handleOpacity => _handleController.view;
   Animation<double> get _toolbarOpacity => _toolbarController.view;
 
@@ -153,11 +156,26 @@ class TextSelectionOverlay implements TextSelectionDelegate {
   }
 
   /// Updates the overlay after the [selection] has changed.
+  ///
+  /// If this method is called while the [SchedulerBinding.schedulerPhase] is
+  /// [SchedulerBinding.persistentCallbacks], i.e. during the build, layout, or
+  /// paint phases (see [WidgetsBinding.beginFrame]), then the update is delayed
+  /// until the post-frame callbacks phase. Otherwise the update is done
+  /// synchronously. This means that it is safe to call during builds, but also
+  /// that if you do call this during a build, the UI will not update until the
+  /// next frame (i.e. many milliseconds later).
   void update(InputValue newInput) {
     if (_input == newInput)
       return;
-
     _input = newInput;
+    if (SchedulerBinding.instance.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      SchedulerBinding.instance.addPostFrameCallback(_markNeedsBuild);
+    } else {
+      _markNeedsBuild();
+    }
+  }
+
+  void _markNeedsBuild([Duration duration]) {
     if (_handles != null) {
       _handles[0].markNeedsBuild();
       _handles[1].markNeedsBuild();
@@ -188,7 +206,7 @@ class TextSelectionOverlay implements TextSelectionDelegate {
 
   Widget _buildHandle(BuildContext context, _TextSelectionHandlePosition position) {
     if ((_selection.isCollapsed && position == _TextSelectionHandlePosition.end) ||
-        handleBuilder == null)
+        selectionControls == null)
       return new Container();  // hide the second handle when collapsed
 
     return new FadeTransition(
@@ -198,14 +216,14 @@ class TextSelectionOverlay implements TextSelectionDelegate {
         onSelectionHandleTapped: _handleSelectionHandleTapped,
         renderObject: renderObject,
         selection: _selection,
-        builder: handleBuilder,
+        selectionControls: selectionControls,
         position: position
       )
     );
   }
 
   Widget _buildToolbar(BuildContext context) {
-    if (toolbarBuilder == null)
+    if (selectionControls == null)
       return new Container();
 
     // Find the horizontal midpoint, just above the selected text.
@@ -219,7 +237,7 @@ class TextSelectionOverlay implements TextSelectionDelegate {
 
     return new FadeTransition(
       opacity: _toolbarOpacity,
-      child: toolbarBuilder(context, midpoint, this)
+      child: selectionControls.buildToolbar(context, midpoint, this)
     );
   }
 
@@ -263,7 +281,7 @@ class _TextSelectionHandleOverlay extends StatefulWidget {
     this.renderObject,
     this.onSelectionHandleChanged,
     this.onSelectionHandleTapped,
-    this.builder
+    this.selectionControls
   }) : super(key: key);
 
   final TextSelection selection;
@@ -271,7 +289,7 @@ class _TextSelectionHandleOverlay extends StatefulWidget {
   final RenderEditableLine renderObject;
   final ValueChanged<TextSelection> onSelectionHandleChanged;
   final VoidCallback onSelectionHandleTapped;
-  final TextSelectionHandleBuilder builder;
+  final TextSelectionControls selectionControls;
 
   @override
   _TextSelectionHandleOverlayState createState() => new _TextSelectionHandleOverlayState();
@@ -281,7 +299,7 @@ class _TextSelectionHandleOverlayState extends State<_TextSelectionHandleOverlay
   Point _dragPosition;
 
   void _handleDragStart(DragStartDetails details) {
-    _dragPosition = details.globalPosition;
+    _dragPosition = details.globalPosition + new Offset(0.0, -config.selectionControls.handleSize.height);
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
@@ -340,15 +358,15 @@ class _TextSelectionHandleOverlayState extends State<_TextSelectionHandleOverlay
     }
 
     return new GestureDetector(
-      onHorizontalDragStart: _handleDragStart,
-      onHorizontalDragUpdate: _handleDragUpdate,
+      onPanStart: _handleDragStart,
+      onPanUpdate: _handleDragUpdate,
       onTap: _handleTap,
       child: new Stack(
         children: <Widget>[
           new Positioned(
             left: point.x,
             top: point.y,
-            child: config.builder(context, type)
+            child: config.selectionControls.buildHandle(context, type)
           )
         ]
       )

@@ -17,18 +17,18 @@ import 'package:package_config/packages.dart';
 import 'package:path/path.dart' as pathos;
 import 'package:yaml/src/yaml_node.dart'; // ignore: implementation_imports
 
-/// Given the [skyEnginePath] and [skyServicesPath], locate corresponding
+/// Given the [skyEnginePath] and [flutterServicesPath], locate corresponding
 /// `_embedder.yaml` and `_sdkext`, compose the full embedded Dart SDK, and
 /// build the [outBundleName] file with its linked summary.
 void buildSkyEngineSdkSummary(
-    String skyEnginePath, String skyServicesPath, String outBundleName) {
+    String skyEnginePath, String flutterServicesPath, String outBundleName) {
   ResourceProvider resourceProvider = PhysicalResourceProvider.INSTANCE;
 
   ContextBuilder builder = new ContextBuilder(resourceProvider, null, null);
-  Packages packages = builder.createPackageMap(skyServicesPath);
+  Packages packages = builder.createPackageMap(flutterServicesPath);
   Map<String, List<Folder>> packageMap = builder.convertPackagesToMap(packages);
   if (packageMap == null) {
-    printError('The expected .packages was not found in $skyServicesPath.');
+    printError('The expected .packages was not found in $flutterServicesPath.');
     return;
   }
   packageMap['sky_engine'] = <Folder>[
@@ -72,11 +72,9 @@ void buildSkyEngineSdkSummary(
   //
   // Build.
   //
-  SummaryBuildConfig config = new SummaryBuildConfig(strongMode: true);
-  BuilderOutput output =
-      new SummaryBuilder(sources, sdk.context, config).build();
+  List<int> bytes = new SummaryBuilder(sources, sdk.context, true).build();
   String outputPath = pathos.join(skyEnginePath, outBundleName);
-  new io.File(outputPath).writeAsBytesSync(output.sum);
+  new io.File(outputPath).writeAsBytesSync(bytes);
 }
 
 Future<Null> buildUnlinkedForPackages(String flutterPath) async {

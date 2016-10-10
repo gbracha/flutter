@@ -8,6 +8,7 @@ import 'dart:io';
 import 'package:args/command_runner.dart';
 import 'package:stack_trace/stack_trace.dart';
 
+import 'src/base/common.dart';
 import 'src/base/context.dart';
 import 'src/base/logger.dart';
 import 'src/base/process.dart';
@@ -23,7 +24,6 @@ import 'src/commands/doctor.dart';
 import 'src/commands/drive.dart';
 import 'src/commands/format.dart';
 import 'src/commands/install.dart';
-import 'src/commands/listen.dart';
 import 'src/commands/logs.dart';
 import 'src/commands/setup.dart';
 import 'src/commands/packages.dart';
@@ -47,8 +47,9 @@ import 'src/runner/flutter_command_runner.dart';
 ///
 /// This function is intended to be used from the `flutter` command line tool.
 Future<Null> main(List<String> args) async {
-  bool help = args.contains('-h') || args.contains('--help');
   bool verbose = args.contains('-v') || args.contains('--verbose');
+  bool help = args.contains('-h') || args.contains('--help') ||
+      (args.isNotEmpty && args.first == 'help') || (args.length == 1 && verbose);
   bool verboseHelp = help && verbose;
 
   if (verboseHelp) {
@@ -58,8 +59,8 @@ Future<Null> main(List<String> args) async {
   }
 
   FlutterCommandRunner runner = new FlutterCommandRunner(verboseHelp: verboseHelp)
-    ..addCommand(new AnalyzeCommand())
-    ..addCommand(new BuildCommand())
+    ..addCommand(new AnalyzeCommand(verboseHelp: verboseHelp))
+    ..addCommand(new BuildCommand(verboseHelp: verboseHelp))
     ..addCommand(new ChannelCommand())
     ..addCommand(new ConfigCommand())
     ..addCommand(new CreateCommand())
@@ -69,12 +70,11 @@ Future<Null> main(List<String> args) async {
     ..addCommand(new DriveCommand())
     ..addCommand(new FormatCommand())
     ..addCommand(new InstallCommand())
-    ..addCommand(new ListenCommand())
     ..addCommand(new LogsCommand())
     ..addCommand(new PackagesCommand())
     ..addCommand(new PrecacheCommand())
     ..addCommand(new RefreshCommand())
-    ..addCommand(new RunCommand())
+    ..addCommand(new RunCommand(verboseHelp: verboseHelp))
     ..addCommand(new RunMojoCommand(hidden: !verboseHelp))
     ..addCommand(new ScreenshotCommand())
     ..addCommand(new SetupCommand(hidden: !verboseHelp))
@@ -85,7 +85,7 @@ Future<Null> main(List<String> args) async {
     ..addCommand(new UpdatePackagesCommand(hidden: !verboseHelp))
     ..addCommand(new UpgradeCommand());
 
-  return Chain.capture(() async {
+  return Chain.capture/*<Future<Null>>*/(() async {
     // Initialize globals.
     context[Logger] = new StdoutLogger();
     context[DeviceManager] = new DeviceManager();
@@ -103,6 +103,16 @@ Future<Null> main(List<String> args) async {
       );
       // Argument error exit code.
       _exit(64);
+    } else if (error is ToolExit) {
+      stderr.writeln(error.message);
+      if (verbose) {
+        stderr.writeln();
+        stderr.writeln(chain.terse.toString());
+        stderr.writeln();
+      }
+      stderr.writeln('If this problem persists, please report the problem at');
+      stderr.writeln('https://github.com/flutter/flutter/issues/new');
+      _exit(error.exitCode ?? 65);
     } else if (error is ProcessExit) {
       // We've caught an exit code.
       _exit(error.exitCode);
@@ -152,7 +162,18 @@ Future<File> _createCrashReport(List<String> args, dynamic error, Chain chain) a
   buffer.writeln('## flutter doctor\n');
   buffer.writeln('```\n${await _doctorText()}```');
 
-  crashFile.writeAsStringSync(buffer.toString());
+  try {
+    crashFile.writeAsStringSync(buffer.toString());
+  } on FileSystemException catch (_) {
+    // Fallback to the system temporary directory.
+    crashFile = getUniqueFile(Directory.systemTemp, 'flutter', 'log');
+    try {
+      crashFile.writeAsStringSync(buffer.toString());
+    } on FileSystemException catch (e) {
+      printError('Could not write crash report to disk: $e');
+      printError(buffer.toString());
+    }
+  }
 
   return crashFile;
 }

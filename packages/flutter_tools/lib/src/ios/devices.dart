@@ -181,7 +181,8 @@ class IOSDevice extends Device {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
-    Map<String, dynamic> platformArgs
+    Map<String, dynamic> platformArgs,
+    bool prebuiltApplication: false
   }) async {
     // TODO(chinmaygarde): Use checked, mainPath, route.
     // TODO(devoncarew): Handle startPaused, debugPort.
@@ -191,6 +192,8 @@ class IOSDevice extends Device {
     XcodeBuildResult buildResult = await buildXcodeProject(app: app, mode: mode, target: mainPath, buildForDevice: true);
     if (!buildResult.success) {
       printError('Could not build the precompiled application for the device.');
+      diagnoseXcodeBuildFailure(buildResult);
+      printError('');
       return new LaunchResult.failed();
     }
 
@@ -247,6 +250,16 @@ class IOSDevice extends Device {
       // ports post launch.
       printTrace("Debugging is enabled, connecting to observatory and the diagnostic server");
 
+      Future<int> forwardObsPort = _acquireAndForwardPort(ProtocolDiscovery.kObservatoryService,
+                                                          debuggingOptions.observatoryPort);
+      Future<int> forwardDiagPort;
+      if (debuggingOptions.buildMode == BuildMode.debug) {
+        forwardDiagPort = _acquireAndForwardPort(ProtocolDiscovery.kDiagnosticService,
+                                                 debuggingOptions.diagnosticPort);
+      } else {
+        forwardDiagPort = new Future<int>.value(null);
+      }
+
       Future<int> launch = runCommandAndStreamOutput(launchCommand, trace: true);
 
       List<int> ports = await launch.then((int result) async {
@@ -258,17 +271,6 @@ class IOSDevice extends Device {
         }
 
         printTrace("Application launched on the device. Attempting to forward ports.");
-
-        Future<int> forwardObsPort = _acquireAndForwardPort(ProtocolDiscovery.kObservatoryService,
-                                                            debuggingOptions.observatoryPort);
-        Future<int> forwardDiagPort;
-        if (debuggingOptions.buildMode == BuildMode.debug) {
-          forwardDiagPort = _acquireAndForwardPort(ProtocolDiscovery.kDiagnosticService,
-                                                   debuggingOptions.diagnosticPort);
-        } else {
-          forwardDiagPort = new Future<int>.value(null);
-        }
-
         return Future.wait(<Future<int>>[forwardObsPort, forwardDiagPort]);
       });
 
@@ -281,6 +283,9 @@ class IOSDevice extends Device {
 
     if (installationResult != 0) {
       printError('Could not install ${bundle.path} on $id.');
+      printError("Try launching XCode and selecting 'Product > Run' to fix the problem:");
+      printError("  open ios/Runner.xcodeproj");
+      printError('');
       return new LaunchResult.failed();
     }
 
@@ -328,7 +333,8 @@ class IOSDevice extends Device {
     ApplicationPackage package,
     LaunchResult result, {
     String mainPath,
-    VMService observatory
+    VMService observatory,
+    bool prebuiltApplication: false
   }) async {
     throw 'unsupported';
   }
@@ -426,8 +432,11 @@ class _IOSDeviceLogReader extends DeviceLogReader {
     });
   }
 
-  // Match for lines like "Runner[297] <Notice>: " in syslog.
-  static final RegExp _runnerRegex = new RegExp(r'Runner\[[\d]+\] <[A-Za-z]+>: ');
+  // Match for lines for the runner in syslog.
+  //
+  // iOS 9 format:  Runner[297] <Notice>:
+  // iOS 10 format: Runner(libsystem_asl.dylib)[297] <Notice>:
+  static final RegExp _runnerRegex = new RegExp(r'Runner(\(.*\))?\[[\d]+\] <[A-Za-z]+>: ');
 
   void _onLine(String line) {
     Match match = _runnerRegex.firstMatch(line);

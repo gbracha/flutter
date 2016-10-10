@@ -2,9 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:math';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 class PestoDemo extends StatelessWidget {
   PestoDemo({ Key key }) : super(key: key);
@@ -51,7 +50,8 @@ class PestoStyle extends TextStyle {
     double fontSize: 12.0,
     FontWeight fontWeight,
     Color color: Colors.black87,
-    double height
+    double letterSpacing,
+    double height,
   }) : super(
     inherit: false,
     color: color,
@@ -59,7 +59,8 @@ class PestoStyle extends TextStyle {
     fontSize: fontSize,
     fontWeight: fontWeight,
     textBaseline: TextBaseline.alphabetic,
-    height: height
+    letterSpacing: letterSpacing,
+    height: height,
   );
 }
 
@@ -118,17 +119,16 @@ class _RecipeGridPageState extends State<RecipeGridPage> {
         builder: (BuildContext context, BoxConstraints constraints) {
           final Size size = constraints.biggest;
           final double appBarHeight = size.height - statusBarHeight;
-          final String logo = appBarHeight >= 70.0 ? _kMediumLogoImage : _kSmallLogoImage;
-          // Extra padding. Calculated to give about 16px on the bottom for the
-          // `small` logo at its native size, and 30px for the `medium`.
-          final double extraPadding = min(0.19 * appBarHeight + 5.4, 40.0);
+          final double t = (appBarHeight - kToolbarHeight) / (_kAppBarHeight - kToolbarHeight);
+          final double extraPadding = new Tween<double>(begin: 10.0, end: 24.0).lerp(t);
+          final double logoHeight = appBarHeight - 1.5 * extraPadding;
           return new Padding(
             padding: new EdgeInsets.only(
               top: statusBarHeight + 0.5 * extraPadding,
               bottom: extraPadding
             ),
             child: new Center(
-              child: new Image.asset(logo, fit: ImageFit.scaleDown)
+              child: new PestoLogo(height: logoHeight, t: t.clamp(0.0, 1.0))
             )
           );
         }
@@ -173,6 +173,61 @@ class _RecipeGridPageState extends State<RecipeGridPage> {
         );
       }
     ));
+  }
+}
+
+class PestoLogo extends StatefulWidget {
+  PestoLogo({this.height, this.t});
+
+  final double height;
+  final double t;
+
+  @override
+  _PestoLogoState createState() => new _PestoLogoState();
+}
+
+class _PestoLogoState extends State<PestoLogo> {
+  // Native sizes for logo and its image/text components.
+  static const double kLogoHeight = 162.0;
+  static const double kLogoWidth = 220.0;
+  static const double kImageHeight = 108.0;
+  static const double kTextHeight = 48.0;
+  final TextStyle titleStyle = const PestoStyle(fontSize: kTextHeight, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 3.0);
+  final RectTween _textRectTween = new RectTween(
+    begin: new Rect.fromLTWH(0.0, kLogoHeight, kLogoWidth, kTextHeight),
+    end: new Rect.fromLTWH(0.0, kImageHeight, kLogoWidth, kTextHeight)
+  );
+  final Curve _textOpacity = const Interval(0.4, 1.0, curve: Curves.easeInOut);
+  final RectTween _imageRectTween = new RectTween(
+    begin: new Rect.fromLTWH(0.0, 0.0, kLogoWidth, kLogoHeight),
+    end: new Rect.fromLTWH(0.0, 0.0, kLogoWidth, kImageHeight)
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return new Transform(
+      transform: new Matrix4.identity()..scale(config.height / kLogoHeight),
+      alignment: FractionalOffset.topCenter,
+      child: new SizedBox(
+        width: kLogoWidth,
+        child: new Stack(
+          overflow: Overflow.visible,
+          children: <Widget>[
+            new Positioned.fromRect(
+              rect: _imageRectTween.lerp(config.t),
+              child: new Image.asset(_kSmallLogoImage, fit: ImageFit.contain)
+            ),
+            new Positioned.fromRect(
+              rect: _textRectTween.lerp(config.t),
+              child: new Opacity(
+                opacity: _textOpacity.transform(config.t),
+                child: new Text('PESTO', style: titleStyle, textAlign: TextAlign.center),
+              )
+            )
+          ]
+        )
+      )
+    );
   }
 }
 
@@ -258,11 +313,6 @@ class _RecipePageState extends State<RecipePage> {
         expandedHeight: _getAppBarHeight(context),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: new IconButton(
-          icon: new Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-          tooltip: 'Back'
-        ),
         actions: <Widget>[
           new PopupMenuButton<String>(
             onSelected: (String item) {},
@@ -274,6 +324,17 @@ class _RecipePageState extends State<RecipePage> {
             ]
           )
         ],
+        flexibleSpace: new FlexibleSpaceBar(
+          background: new DecoratedBox(
+            decoration: new BoxDecoration(
+              gradient: new LinearGradient(
+                begin: const FractionalOffset(0.5, 0.0),
+                end: const FractionalOffset(0.5, 0.40),
+                colors: <Color>[const Color(0x60000000), const Color(0x00000000)]
+              )
+            )
+          )
+        ),
       ),
       body: _buildContainer(context)
     );
@@ -304,7 +365,7 @@ class _RecipePageState extends State<RecipePage> {
           )
         ),
         new ClampOverscrolls(
-          value: true,
+          edge: ScrollableEdge.both,
           child: new ScrollableViewport(
             scrollableKey: _scrollableKey,
             child: new RepaintBoundary(

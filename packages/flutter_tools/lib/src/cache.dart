@@ -62,10 +62,11 @@ class Cache {
         locked = true;
       } on FileSystemException {
         if (!printed) {
-          printStatus('Waiting to be able to obtain lock of Flutter binary artifacts directory...');
+          printTrace('Waiting to be able to obtain lock of Flutter binary artifacts directory: ${_lock.path}');
+          printStatus('Waiting for another flutter command to release the startup lock...');
           printed = true;
         }
-        await new Future/*<Null>*/.delayed(const Duration(milliseconds: 50));
+        await new Future<Null>.delayed(const Duration(milliseconds: 50));
       }
     }
   }
@@ -91,7 +92,7 @@ class Cache {
 
   static String get engineRevision {
     if (_engineRevision == null) {
-      File revisionFile = new File(path.join(flutterRoot, 'bin', 'cache', 'engine.version'));
+      File revisionFile = new File(path.join(flutterRoot, 'bin', 'internal', 'engine.version'));
       if (revisionFile.existsSync())
         _engineRevision = revisionFile.readAsStringSync().trim();
     }
@@ -126,7 +127,7 @@ class Cache {
   }
 
   String getVersionFor(String artifactName) {
-    File versionFile = new File(path.join(getRoot().path, '$artifactName.version'));
+    File versionFile = new File(path.join(_rootOverride?.path ?? flutterRoot, 'bin', 'internal', '$artifactName.version'));
     return versionFile.existsSync() ? versionFile.readAsStringSync().trim() : null;
   }
 
@@ -174,6 +175,8 @@ class Cache {
   }
 
   Future<Null> updateAll() async {
+    if (!_lockEnabled)
+      return null;
     MaterialFonts materialFonts = new MaterialFonts(cache);
     if (!materialFonts.isUpToDate())
       await materialFonts.download();
@@ -242,13 +245,14 @@ class FlutterEngine {
   FlutterEngine(this.cache);
 
   static const String kName = 'engine';
+  static const String kFlutterServices = 'flutter_services';
   static const String kSkyEngine = 'sky_engine';
   static const String kSkyServices = 'sky_services';
   static const String kSdkBundle = 'sdk.ds';
 
   final Cache cache;
 
-  List<String> _getPackageDirs() => const <String>[kSkyEngine, kSkyServices];
+  List<String> _getPackageDirs() => const <String>[kSkyEngine, kSkyServices, kFlutterServices];
 
   List<String> _getEngineDirs() {
     List<String> dirs = <String>[
@@ -341,9 +345,9 @@ class FlutterEngine {
 
     Status summaryStatus = logger.startProgress('Building Dart SDK summary...');
     try {
+      String flutterServicesPath = path.join(pkgDir.path, kFlutterServices);
       String skyEnginePath = path.join(pkgDir.path, kSkyEngine);
-      String skyServicesPath = path.join(pkgDir.path, kSkyServices);
-      buildSkyEngineSdkSummary(skyEnginePath, skyServicesPath, kSdkBundle);
+      buildSkyEngineSdkSummary(skyEnginePath, flutterServicesPath, kSdkBundle);
     } finally {
       summaryStatus.stop(showElapsedTime: true);
     }

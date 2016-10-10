@@ -67,6 +67,12 @@ final List<GalleryItem> kAllGalleryItems = <GalleryItem>[
   ),
   // Components
   new GalleryItem(
+    title: 'Bottom navigation',
+    subtitle: 'Bottom navigation with cross-fading views',
+    routeName: BottomNavigationDemo.routeName,
+    buildRoute: (BuildContext context) => new BottomNavigationDemo()
+  ),
+  new GalleryItem(
     title: 'Buttons',
     subtitle: 'All kinds: flat, raised, dropdown, icon, etc',
     routeName: ButtonsDemo.routeName,
@@ -223,13 +229,6 @@ final List<GalleryItem> kAllGalleryItems = <GalleryItem>[
     buildRoute: (BuildContext context) => new TooltipDemo()
   ),
   // Styles
-  new GalleryItem(
-    title: 'Animation',
-    subtitle: 'Material motion for points and rectangles',
-    category: 'Style',
-    routeName: AnimationDemo.routeName,
-    buildRoute: (BuildContext context) => new AnimationDemo()
-  ),
   new GalleryItem(
     title: 'Colors',
     subtitle: 'All of the predefined colors',

@@ -29,7 +29,7 @@ abstract class VirtualViewport extends RenderObjectWidget {
 }
 
 abstract class _WidgetProvider {
-  void didUpdateWidget(VirtualViewport oldWidget, VirtualViewport newWidget);
+  void didUpdateWidget(@checked VirtualViewport oldWidget, @checked VirtualViewport newWidget);
   int get virtualChildCount;
   void prepareChildren(VirtualViewportElement context, int base, int count);
   Widget getChild(int i);
@@ -100,6 +100,18 @@ abstract class VirtualViewportElement extends RenderObjectElement {
       visitor(child);
   }
 
+  @override
+  void detachChild(Element child) {
+    assert(() {
+      // TODO(ianh): implement detachChild for VirtualViewport
+      throw new FlutterError(
+        '$runtimeType does not yet support GlobalKey reparenting of its children.\n'
+        'As a temporary workaround, wrap the child with the GlobalKey in a '
+        'Container or other harmless child.'
+      );
+    });
+  }
+
   _WidgetProvider _widgetProvider;
 
   @override
@@ -134,7 +146,7 @@ abstract class VirtualViewportElement extends RenderObjectElement {
   /// Copies the configuration described by [widget] to this element's [renderObject].
   @protected
   @mustCallSuper
-  void updateRenderObject(VirtualViewport oldWidget) {
+  void updateRenderObject(@checked VirtualViewport oldWidget) {
     renderObject.virtualChildCount = _widgetProvider.virtualChildCount;
 
     if (startOffsetBase != null) {

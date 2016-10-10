@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 import 'package:vector_math/vector_math_64.dart';
 
 import 'constants.dart';
@@ -69,6 +70,9 @@ abstract class InkSplash {
 
   /// Free up the resources associated with this reaction.
   void dispose();
+
+  /// The default radius of an ink splash in logical pixels.
+  static const double defaultRadius = 35.0;
 }
 
 /// A visual emphasis on a part of a [Material] receiving user interaction.
@@ -117,7 +121,8 @@ abstract class MaterialInkController {
     Color color,
     bool containedInkWell: false,
     RectCallback rectCallback,
-    VoidCallback onRemoved
+    VoidCallback onRemoved,
+    double radius,
   });
 
   /// Begin a highlight animation. If a rectCallback is given, then it
@@ -216,7 +221,7 @@ class Material extends StatefulWidget {
   }
 }
 
-class _MaterialState extends State<Material> {
+class _MaterialState extends State<Material> with TickerProviderStateMixin {
   final GlobalKey _inkFeatureRenderer = new GlobalKey(debugLabel: 'ink renderer');
 
   Color _getBackgroundColor(BuildContext context) {
@@ -251,7 +256,8 @@ class _MaterialState extends State<Material> {
       child: new _InkFeatures(
         key: _inkFeatureRenderer,
         color: backgroundColor,
-        child: contents
+        child: contents,
+        vsync: this,
       )
     );
     if (config.type == MaterialType.circle) {
@@ -288,12 +294,18 @@ class _MaterialState extends State<Material> {
 const Duration _kHighlightFadeDuration = const Duration(milliseconds: 200);
 const Duration _kUnconfirmedSplashDuration = const Duration(seconds: 1);
 
-const double kDefaultSplashRadius = 35.0; // logical pixels
 const double _kSplashConfirmedVelocity = 1.0; // logical pixels per millisecond
 const double _kSplashInitialSize = 0.0; // logical pixels
 
 class _RenderInkFeatures extends RenderProxyBox implements MaterialInkController {
-  _RenderInkFeatures({ RenderBox child, this.color }) : super(child);
+  _RenderInkFeatures({ RenderBox child, @required this.vsync, this.color }) : super(child) {
+    assert(vsync != null);
+  }
+
+  // This class should exist in a 1:1 relationship with a MaterialState object,
+  // since there's no current support for dynamically changing the ticker
+  // provider.
+  final TickerProvider vsync;
 
   // This is here to satisfy the MaterialInkController contract.
   // The actual painting of this color is done by a Container in the
@@ -310,9 +322,9 @@ class _RenderInkFeatures extends RenderProxyBox implements MaterialInkController
     Color color,
     bool containedInkWell: false,
     RectCallback rectCallback,
-    VoidCallback onRemoved
+    VoidCallback onRemoved,
+    double radius,
   }) {
-    double radius;
     RectCallback clipCallback;
     if (containedInkWell) {
       Size size;
@@ -323,20 +335,21 @@ class _RenderInkFeatures extends RenderProxyBox implements MaterialInkController
         size = referenceBox.size;
         clipCallback = () => Point.origin & referenceBox.size;
       }
-      radius = _getSplashTargetSize(size, position);
+      radius ??= _getSplashTargetSize(size, position);
     } else {
       assert(rectCallback == null);
-      radius = kDefaultSplashRadius;
+      radius ??= InkSplash.defaultRadius;
     }
     _InkSplash splash = new _InkSplash(
-      renderer: this,
+      controller: this,
       referenceBox: referenceBox,
       position: position,
       color: color,
       targetRadius: radius,
       clipCallback: clipCallback,
       repositionToReferenceBox: !containedInkWell,
-      onRemoved: onRemoved
+      onRemoved: onRemoved,
+      vsync: vsync,
     );
     addInkFeature(splash);
     return splash;
@@ -359,12 +372,13 @@ class _RenderInkFeatures extends RenderProxyBox implements MaterialInkController
     VoidCallback onRemoved
   }) {
     _InkHighlight highlight = new _InkHighlight(
-      renderer: this,
+      controller: this,
       referenceBox: referenceBox,
       color: color,
       shape: shape,
       rectCallback: rectCallback,
-      onRemoved: onRemoved
+      onRemoved: onRemoved,
+      vsync: vsync,
     );
     addInkFeature(highlight);
     return highlight;
@@ -373,7 +387,7 @@ class _RenderInkFeatures extends RenderProxyBox implements MaterialInkController
   @override
   void addInkFeature(InkFeature feature) {
     assert(!feature._debugDisposed);
-    assert(feature.renderer == this);
+    assert(feature._controller == this);
     assert(!_inkFeatures.contains(feature));
     _inkFeatures.add(feature);
     markNeedsPaint();
@@ -403,33 +417,44 @@ class _RenderInkFeatures extends RenderProxyBox implements MaterialInkController
 }
 
 class _InkFeatures extends SingleChildRenderObjectWidget {
-  _InkFeatures({ Key key, this.color, Widget child }) : super(key: key, child: child);
+  _InkFeatures({ Key key, this.color, Widget child, @required this.vsync }) : super(key: key, child: child);
+
+  // This widget must be owned by a MaterialState, which must be provided as the vsync.
+  // This relationship must be 1:1 and cannot change for the lifetime of the MaterialState.
 
   final Color color;
 
+  final TickerProvider vsync;
+
   @override
-  _RenderInkFeatures createRenderObject(BuildContext context) => new _RenderInkFeatures(color: color);
+  _RenderInkFeatures createRenderObject(BuildContext context) {
+    return new _RenderInkFeatures(
+      color: color,
+      vsync: vsync
+    );
+  }
 
   @override
   void updateRenderObject(BuildContext context, _RenderInkFeatures renderObject) {
     renderObject.color = color;
+    assert(vsync == renderObject.vsync);
   }
 }
 
 /// A visual reaction on a piece of [Material].
 ///
-/// Typically used with [MaterialInkController].
+/// To add an ink feature to a piece of [Material], obtain the
+/// [MaterialInkController] via [Material.of] and call
+/// [MaterialInkController.addInkFeature].
 abstract class InkFeature {
-  /// To add an ink feature to a piece of Material, obtain the
-  /// [MaterialInkController] via [Material.of] and call
-  /// [MaterialInkController.addInkFeature].
+  /// Initializes fields for subclasses.
   InkFeature({
-    this.renderer,
+    MaterialInkController controller,
     this.referenceBox,
     this.onRemoved
-  });
+  }) : _controller = controller;
 
-  final _RenderInkFeatures renderer;
+  _RenderInkFeatures _controller;
 
   /// The render box whose visual position defines the frame of reference for this ink feature.
   final RenderBox referenceBox;
@@ -443,7 +468,7 @@ abstract class InkFeature {
   void dispose() {
     assert(!_debugDisposed);
     assert(() { _debugDisposed = true; return true; });
-    renderer._removeFeature(this);
+    _controller._removeFeature(this);
     if (onRemoved != null)
       onRemoved();
   }
@@ -454,7 +479,7 @@ abstract class InkFeature {
     // find the chain of renderers from us to the feature's referenceBox
     List<RenderBox> descendants = <RenderBox>[referenceBox];
     RenderBox node = referenceBox;
-    while (node != renderer) {
+    while (node != _controller) {
       node = node.parent;
       assert(node != null);
       descendants.add(node);
@@ -479,25 +504,25 @@ abstract class InkFeature {
 
 class _InkSplash extends InkFeature implements InkSplash {
   _InkSplash({
-    _RenderInkFeatures renderer,
+    _RenderInkFeatures controller,
     RenderBox referenceBox,
     this.position,
     this.color,
     this.targetRadius,
     this.clipCallback,
     this.repositionToReferenceBox,
-    VoidCallback onRemoved
-  }) : super(renderer: renderer, referenceBox: referenceBox, onRemoved: onRemoved) {
-    _radiusController = new AnimationController(duration: _kUnconfirmedSplashDuration)
-      ..addListener(renderer.markNeedsPaint)
+    VoidCallback onRemoved,
+    @required TickerProvider vsync,
+  }) : super(controller: controller, referenceBox: referenceBox, onRemoved: onRemoved) {
+    _radiusController = new AnimationController(duration: _kUnconfirmedSplashDuration, vsync: vsync)
+      ..addListener(controller.markNeedsPaint)
       ..forward();
     _radius = new Tween<double>(
       begin: _kSplashInitialSize,
       end: targetRadius
     ).animate(_radiusController);
-
-    _alphaController = new AnimationController(duration: _kHighlightFadeDuration)
-      ..addListener(renderer.markNeedsPaint)
+    _alphaController = new AnimationController(duration: _kHighlightFadeDuration, vsync: vsync)
+      ..addListener(controller.markNeedsPaint)
       ..addStatusListener(_handleAlphaStatusChanged);
     _alpha = new IntTween(
       begin: color.alpha,
@@ -571,16 +596,17 @@ class _InkSplash extends InkFeature implements InkSplash {
 
 class _InkHighlight extends InkFeature implements InkHighlight {
   _InkHighlight({
-    _RenderInkFeatures renderer,
+    _RenderInkFeatures controller,
     RenderBox referenceBox,
     this.rectCallback,
     Color color,
     this.shape,
-    VoidCallback onRemoved
+    VoidCallback onRemoved,
+    @required TickerProvider vsync,
   }) : _color = color,
-       super(renderer: renderer, referenceBox: referenceBox, onRemoved: onRemoved) {
-    _alphaController = new AnimationController(duration: _kHighlightFadeDuration)
-      ..addListener(renderer.markNeedsPaint)
+       super(controller: controller, referenceBox: referenceBox, onRemoved: onRemoved) {
+    _alphaController = new AnimationController(duration: _kHighlightFadeDuration, vsync: vsync)
+      ..addListener(controller.markNeedsPaint)
       ..addStatusListener(_handleAlphaStatusChanged)
       ..forward();
     _alpha = new IntTween(
@@ -600,7 +626,7 @@ class _InkHighlight extends InkFeature implements InkHighlight {
     if (value == _color)
       return;
     _color = value;
-    renderer.markNeedsPaint();
+    _controller.markNeedsPaint();
   }
 
   final BoxShape shape;
@@ -639,7 +665,7 @@ class _InkHighlight extends InkFeature implements InkHighlight {
     if (shape == BoxShape.rectangle)
       canvas.drawRect(rect, paint);
     else
-      canvas.drawCircle(rect.center, kDefaultSplashRadius, paint);
+      canvas.drawCircle(rect.center, InkSplash.defaultRadius, paint);
   }
 
   @override

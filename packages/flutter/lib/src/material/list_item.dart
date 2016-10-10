@@ -25,6 +25,7 @@ import 'theme.dart';
 ///
 ///  * [MaterialList]
 ///  * [CircleAvatar]
+///  * [Divider]
 ///  * <https://www.google.com/design/spec/components/lists.html>
 class ListItem extends StatelessWidget {
   /// Creates a list item.
@@ -76,7 +77,7 @@ class ListItem extends StatelessWidget {
 
   /// Whether this list item is interactive.
   ///
-  /// If false, this list item is styled with the disabled color from the
+  /// If `false`, this list item is styled with the disabled color from the
   /// current [Theme] and the [onTap] and [onLongPress] callbacks are
   /// inoperative.
   final bool enabled;
@@ -154,7 +155,7 @@ class ListItem extends StatelessWidget {
       children.add(new Container(
         margin: const EdgeInsets.only(right: 16.0),
         width: 40.0,
-        align: FractionalOffset.centerLeft,
+        alignment: FractionalOffset.centerLeft,
         child: leading
       ));
     }
@@ -186,7 +187,7 @@ class ListItem extends StatelessWidget {
     if (trailing != null) {
       children.add(new Container(
         margin: const EdgeInsets.only(left: 16.0),
-        align: FractionalOffset.centerRight,
+        alignment: FractionalOffset.centerRight,
         child: trailing
       ));
     }

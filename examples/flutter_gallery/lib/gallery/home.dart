@@ -95,19 +95,20 @@ class GalleryHome extends StatefulWidget {
   GalleryHomeState createState() => new GalleryHomeState();
 }
 
-class GalleryHomeState extends State<GalleryHome> {
-  static final Key _homeKey = new ValueKey<String>("Gallery Home");
+class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderStateMixin {
+  static final Key _homeKey = new ValueKey<String>('Gallery Home');
   static final GlobalKey<ScrollableState> _scrollableKey = new GlobalKey<ScrollableState>();
 
-  final AnimationController _controller = new AnimationController(
-    duration: const Duration(milliseconds: 600),
-    debugLabel: "preview banner"
-  );
+  AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _controller.forward();
+    _controller = new AnimationController(
+      duration: const Duration(milliseconds: 600),
+      debugLabel: 'preview banner',
+      vsync: this,
+    )..forward();
   }
 
   @override
@@ -129,7 +130,7 @@ class GalleryHomeState extends State<GalleryHome> {
           new Container(
             height: 48.0,
             padding: const EdgeInsets.only(left: 16.0),
-            align: FractionalOffset.centerLeft,
+            alignment: FractionalOffset.centerLeft,
             child: new Text(galleryItem.category, style: headerStyle)
           )
         );

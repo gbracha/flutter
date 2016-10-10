@@ -32,9 +32,12 @@ class TextPainter {
   /// [layout].
   TextPainter({
     TextSpan text,
-    TextAlign textAlign
-  }) : _text = text, _textAlign = textAlign {
+    TextAlign textAlign,
+    double textScaleFactor: 1.0,
+    String ellipsis,
+  }) : _text = text, _textAlign = textAlign, _textScaleFactor = textScaleFactor, _ellipsis = ellipsis {
     assert(text == null || text.debugAssertIsValid());
+    assert(textScaleFactor != null);
   }
 
   ui.Paragraph _paragraph;
@@ -62,6 +65,36 @@ class TextPainter {
     _paragraph = null;
     _needsLayout = true;
   }
+
+  /// The number of font pixels for each logical pixel.
+  ///
+  /// For example, if the text scale factor is 1.5, text will be 50% larger than
+  /// the specified font size.
+  double get textScaleFactor => _textScaleFactor;
+  double _textScaleFactor;
+  set textScaleFactor(double value) {
+    assert(value != null);
+    if (_textScaleFactor == value)
+      return;
+    _textScaleFactor = value;
+    _paragraph = null;
+    _needsLayout = true;
+  }
+
+  /// The string used to ellipsize overflowing text.  Setting this to a nonempty
+  /// string will cause this string to be substituted for the remaining text
+  /// if the text can not fit within the specificed maximum width.
+  String get ellipsis => _ellipsis;
+  String _ellipsis;
+  set ellipsis(String value) {
+    assert(value == null || value.isNotEmpty);
+    if (_ellipsis == value)
+      return;
+    _ellipsis = value;
+    _paragraph = null;
+    _needsLayout = true;
+  }
+
 
   // Unfortunately, using full precision floating point here causes bad layouts
   // because floating point math isn't associative. If we add and subtract
@@ -144,8 +177,12 @@ class TextPainter {
     _needsLayout = false;
     if (_paragraph == null) {
       ui.ParagraphBuilder builder = new ui.ParagraphBuilder();
-      _text.build(builder);
-      ui.ParagraphStyle paragraphStyle = _text.style?.getParagraphStyle(textAlign: textAlign);
+      _text.build(builder, textScaleFactor: textScaleFactor);
+      ui.ParagraphStyle paragraphStyle = _text.style?.getParagraphStyle(
+        textAlign: textAlign,
+        textScaleFactor: textScaleFactor,
+        ellipsis: _ellipsis,
+      );
       paragraphStyle ??= new ui.ParagraphStyle();
       _paragraph = builder.build(paragraphStyle);
     }
@@ -182,7 +219,7 @@ class TextPainter {
     ui.TextBox box = boxes[0];
     double caretEnd = box.end;
     double dx = box.direction == TextDirection.rtl ? caretEnd : caretEnd - caretPrototype.width;
-    return new Offset(dx, 0.0);
+    return new Offset(dx, box.top);
   }
 
   Offset _getOffsetFromDownstream(int offset, Rect caretPrototype) {
@@ -192,7 +229,7 @@ class TextPainter {
     ui.TextBox box = boxes[0];
     double caretStart = box.start;
     double dx = box.direction == TextDirection.rtl ? caretStart - caretPrototype.width : caretStart;
-    return new Offset(dx, 0.0);
+    return new Offset(dx, box.top);
   }
 
   /// Returns the offset at which to paint the caret.

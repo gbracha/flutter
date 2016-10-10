@@ -10,7 +10,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/painting.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:meta/meta.dart';
-import 'package:mojo_services/mojo/gfx/composition/scene_token.mojom.dart' as mojom;
 import 'package:vector_math/vector_math_64.dart';
 
 import 'debug.dart';
@@ -217,39 +216,18 @@ class PaintingContext {
     _currentLayer?.willChangeHint = true;
   }
 
-  /// Adds a performance overlay to the scene.
+  /// Adds a composited layer to the recording.
   ///
-  /// * `offset` is the offset from the origin of the canvas' coordinate system
-  ///   to the origin of the caller's coordinate system.
-  /// * `optionsMask` is a mask is created by shifting 1 by the index of the
-  ///   specific [PerformanceOverlayOption] to enable.
-  /// * `rasterizerThreshold` is an integer specifying the number of frame
-  ///   intervals that the rasterizer must miss before it decides that the frame
-  ///   is suitable for capturing an SkPicture trace for further analysis.
-  /// * `size` is the size of the overlay to draw. The upper left corner of the
-  ///   overlay will be placed at the origin of the caller's coodinate system.
+  /// After calling this function, the [canvas] property will change to refer to
+  /// a new [Canvas] that draws on top of the given layer.
   ///
-  /// Performance overlays are always composited because they display data that
-  /// isn't available until the compositing phase.
-  void pushPerformanceOverlay(Offset offset, int optionsMask, int rasterizerThreshold, Size size) {
+  /// A [RenderObject] that uses this function is very likely to require its
+  /// [RenderObject.needsCompositing] property to return true. That informs
+  /// ancestor render objects that this render object will include a composited
+  /// layer, which causes them to use composited clips, for example.
+  void addLayer(Layer layer) {
     _stopRecordingIfNeeded();
-    _appendLayer(new PerformanceOverlayLayer(
-      overlayRect: new Rect.fromLTWH(offset.dx, offset.dy, size.width, size.height),
-      optionsMask: optionsMask,
-      rasterizerThreshold: rasterizerThreshold
-    ));
-  }
-
-  /// (mojo-only) Draws content from another process.
-  void pushChildScene(Offset offset, double devicePixelRatio, int physicalWidth, int physicalHeight, mojom.SceneToken sceneToken) {
-    _stopRecordingIfNeeded();
-    _appendLayer(new ChildSceneLayer(
-      offset: offset,
-      devicePixelRatio: devicePixelRatio,
-      physicalWidth: physicalWidth,
-      physicalHeight: physicalHeight,
-      sceneToken: sceneToken
-    ));
+    _appendLayer(layer);
   }
 
   /// Clip further painting using a rectangle.
@@ -549,7 +527,7 @@ abstract class _SemanticsFragment {
     _children = children ?? const <_SemanticsFragment>[];
   }
 
-  final SemanticAnnotator annotator;
+  final SemanticsAnnotator annotator;
 
   List<RenderObject> _ancestorChain;
   void addAncestor(RenderObject ancestor) {
@@ -596,7 +574,7 @@ class _CleanSemanticsFragment extends _SemanticsFragment {
 abstract class _InterestingSemanticsFragment extends _SemanticsFragment {
   _InterestingSemanticsFragment({
     RenderObject renderObjectOwner,
-    SemanticAnnotator annotator,
+    SemanticsAnnotator annotator,
     Iterable<_SemanticsFragment> children
   }) : super(renderObjectOwner: renderObjectOwner, annotator: annotator, children: children);
 
@@ -630,7 +608,7 @@ abstract class _InterestingSemanticsFragment extends _SemanticsFragment {
 class _RootSemanticsFragment extends _InterestingSemanticsFragment {
   _RootSemanticsFragment({
     RenderObject renderObjectOwner,
-    SemanticAnnotator annotator,
+    SemanticsAnnotator annotator,
     Iterable<_SemanticsFragment> children
   }) : super(renderObjectOwner: renderObjectOwner, annotator: annotator, children: children);
 
@@ -641,7 +619,7 @@ class _RootSemanticsFragment extends _InterestingSemanticsFragment {
     assert(currentSemantics == null);
     assert(parentSemantics == null);
     renderObjectOwner._semantics ??= new SemanticsNode.root(
-      handler: renderObjectOwner is SemanticActionHandler ? renderObjectOwner as dynamic : null,
+      handler: renderObjectOwner is SemanticsActionHandler ? renderObjectOwner as dynamic : null,
       owner: renderObjectOwner.owner.semanticsOwner
     );
     SemanticsNode node = renderObjectOwner._semantics;
@@ -660,14 +638,14 @@ class _RootSemanticsFragment extends _InterestingSemanticsFragment {
 class _ConcreteSemanticsFragment extends _InterestingSemanticsFragment {
   _ConcreteSemanticsFragment({
     RenderObject renderObjectOwner,
-    SemanticAnnotator annotator,
+    SemanticsAnnotator annotator,
     Iterable<_SemanticsFragment> children
   }) : super(renderObjectOwner: renderObjectOwner, annotator: annotator, children: children);
 
   @override
   SemanticsNode establishSemanticsNode(_SemanticsGeometry geometry, SemanticsNode currentSemantics, SemanticsNode parentSemantics) {
     renderObjectOwner._semantics ??= new SemanticsNode(
-      handler: renderObjectOwner is SemanticActionHandler ? renderObjectOwner as dynamic : null
+      handler: renderObjectOwner is SemanticsActionHandler ? renderObjectOwner as dynamic : null
     );
     SemanticsNode node = renderObjectOwner._semantics;
     if (geometry != null) {
@@ -688,7 +666,7 @@ class _ConcreteSemanticsFragment extends _InterestingSemanticsFragment {
 class _ImplicitSemanticsFragment extends _InterestingSemanticsFragment {
   _ImplicitSemanticsFragment({
     RenderObject renderObjectOwner,
-    SemanticAnnotator annotator,
+    SemanticsAnnotator annotator,
     Iterable<_SemanticsFragment> children
   }) : super(renderObjectOwner: renderObjectOwner, annotator: annotator, children: children);
 
@@ -703,7 +681,7 @@ class _ImplicitSemanticsFragment extends _InterestingSemanticsFragment {
     _haveConcreteNode = currentSemantics == null && annotator != null;
     if (haveConcreteNode) {
       renderObjectOwner._semantics ??= new SemanticsNode(
-        handler: renderObjectOwner is SemanticActionHandler ? renderObjectOwner as dynamic : null
+        handler: renderObjectOwner is SemanticsActionHandler ? renderObjectOwner as dynamic : null
       );
       node = renderObjectOwner._semantics;
     } else {
@@ -789,7 +767,11 @@ class PipelineOwner {
   /// Typically created by the binding (e.g., [RendererBinding]), but can be
   /// created separately from the binding to drive off-screen render objects
   /// through the rendering pipeline.
-  PipelineOwner({ this.onNeedVisualUpdate });
+  PipelineOwner({
+    this.onNeedVisualUpdate,
+    this.onScheduleInitialSemantics,
+    this.onClearSemantics,
+  });
 
   /// Called when a render object associated with this pipeline owner wishes to
   /// update its visual appearance.
@@ -800,6 +782,21 @@ class PipelineOwner {
   /// duplicate calls quickly.
   final VoidCallback onNeedVisualUpdate;
 
+  /// Called when [addSemanticsListener] is called when there was no
+  /// [SemanticsOwner] present, to request that the
+  /// [RenderObject.scheduleInitialSemantics] method be called on the
+  /// appropriate object(s).
+  ///
+  /// For example, the [RendererBinding] calls it on the [RenderView] object.
+  final VoidCallback onScheduleInitialSemantics;
+
+  /// Called when the last [SemanticsListener] is removed from the
+  /// [SemanticsOwner], to request that the [RenderObject.clearSemantics] method
+  /// be called on the appropriate object(s).
+  ///
+  /// For example, the [RendererBinding] calls it on the [RenderView] object.
+  final VoidCallback onClearSemantics;
+
   /// Calls [onNeedVisualUpdate] if [onNeedVisualUpdate] is not null.
   ///
   /// Used to notify the pipeline owner that an associated render object wishes
@@ -809,15 +806,17 @@ class PipelineOwner {
       onNeedVisualUpdate();
   }
 
-  /// The unique render object managed by this pipeline that has no parent.
-  RenderObject get rootRenderObject => _rootRenderObject;
-  RenderObject _rootRenderObject;
-  set rootRenderObject(RenderObject value) {
-    if (_rootRenderObject == value)
+  /// The unique object managed by this pipeline that has no parent.
+  ///
+  /// This object does not have to be a [RenderObject].
+  AbstractNode get rootNode => _rootNode;
+  AbstractNode _rootNode;
+  set rootNode(AbstractNode value) {
+    if (_rootNode == value)
       return;
-    _rootRenderObject?.detach();
-    _rootRenderObject = value;
-    _rootRenderObject?.attach(this);
+    _rootNode?.detach();
+    _rootNode = value;
+    _rootNode?.attach(this);
   }
 
   /// Calls the given listener whenever the semantics of the render tree change.
@@ -829,7 +828,8 @@ class PipelineOwner {
         initialListener: listener,
         onLastListenerRemoved: _handleLastSemanticsListenerRemoved
       );
-      _rootRenderObject.scheduleInitialSemantics();
+      if (onScheduleInitialSemantics != null)
+        onScheduleInitialSemantics();
     } else {
       _semanticsOwner.addListener(listener);
     }
@@ -839,7 +839,8 @@ class PipelineOwner {
 
   void _handleLastSemanticsListenerRemoved() {
     assert(!_debugDoingSemantics);
-    rootRenderObject._clearSemantics();
+    if (onClearSemantics != null)
+      onClearSemantics();
     _semanticsOwner.dispose();
     _semanticsOwner = null;
   }
@@ -993,16 +994,6 @@ class PipelineOwner {
     }
     _semanticsOwner.sendSemanticsTree();
   }
-
-  /// Cause the entire render tree rooted at [rootRenderObject] to be entirely
-  /// reprocessed. This is used by development tools when the application code
-  /// has changed, to cause the rendering tree to pick up any changed
-  /// implementations.
-  ///
-  /// This is expensive and should not be called except during development.
-  void reassemble() {
-    _rootRenderObject?._reassemble();
-  }
 }
 
 // See _performLayout.
@@ -1038,14 +1029,25 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
     _performLayout = performLayout;
   }
 
-  void _reassemble() {
+  /// Cause the entire subtree rooted at the given [RenderObject] to be marked
+  /// dirty for layout, paint, etc. This is called by the [RendererBinding] in
+  /// response to the `ext.flutter.reassemble` hook, which is used by
+  /// development tools when the application code has changed, to cause the
+  /// widget tree to pick up any changed implementations.
+  ///
+  /// This is expensive and should not be called except during development.
+  ///
+  /// See also:
+  ///
+  /// * [BindingBase.reassembleApplication].
+  void reassemble() {
     _performLayout = performLayout;
     markNeedsLayout();
     markNeedsCompositingBitsUpdate();
     markNeedsPaint();
     markNeedsSemanticsUpdate();
     visitChildren((RenderObject child) {
-      child._reassemble();
+      child.reassemble();
     });
   }
 
@@ -1072,7 +1074,7 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
   ///
   /// You can call this function to set up the parent data for child before the
   /// child is added to the parent's child list.
-  void setupParentData(RenderObject child) {
+  void setupParentData(@checked RenderObject child) {
     assert(_debugCanPerformMutations);
     if (child.parentData is! ParentData)
       child.parentData = new ParentData();
@@ -1490,12 +1492,13 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
     ));
     assert(!_debugDoingThisResize);
     assert(!_debugDoingThisLayout);
-    final RenderObject parent = this.parent;
     RenderObject relayoutBoundary;
-    if (!parentUsesSize || sizedByParent || constraints.isTight || parent is! RenderObject)
+    if (!parentUsesSize || sizedByParent || constraints.isTight || parent is! RenderObject) {
       relayoutBoundary = this;
-    else
+    } else {
+      final RenderObject parent = this.parent;
       relayoutBoundary = parent._relayoutBoundary;
+    }
     assert(parent == this.parent);
     assert(() {
       _debugCanParentUseSize = parentUsesSize;
@@ -1928,7 +1931,7 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
   ///
   /// Used by coordinate conversion functions to translate coordinates local to
   /// one render object into coordinates local to another render object.
-  void applyPaintTransform(RenderObject child, Matrix4 transform) {
+  void applyPaintTransform(@checked RenderObject child, Matrix4 transform) {
     assert(child.parent == this);
   }
 
@@ -1940,7 +1943,7 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
   ///
   /// This is used in the semantics phase to avoid including children
   /// that are not physically visible.
-  Rect describeApproximatePaintClip(RenderObject child) => null;
+  Rect describeApproximatePaintClip(@checked RenderObject child) => null;
 
 
   // SEMANTICS
@@ -1992,12 +1995,17 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
   }
 
   /// Removes all semantics from this render object and its descendants.
-  void _clearSemantics() {
+  ///
+  /// Should only be called in response to the [PipelineOwner] calling its
+  /// [PipelineOwner.onClearSemantics] callback.
+  ///
+  /// Should only be called on objects whose [parent] is not a [RenderObject].
+  void clearSemantics() {
     _needsSemanticsUpdate = true;
     _needsSemanticsGeometryUpdate = true;
     _semantics = null;
     visitChildren((RenderObject child) {
-      child._clearSemantics();
+      child.clearSemantics();
     });
   }
 
@@ -2109,7 +2117,7 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
     });
     _needsSemanticsUpdate = false;
     _needsSemanticsGeometryUpdate = false;
-    SemanticAnnotator annotator = semanticAnnotator;
+    SemanticsAnnotator annotator = semanticsAnnotator;
     if (parent is! RenderObject)
       return new _RootSemanticsFragment(renderObjectOwner: this, annotator: annotator, children: children);
     if (isSemanticBoundary)
@@ -2159,14 +2167,14 @@ abstract class RenderObject extends AbstractNode implements HitTestTarget {
   /// [hasSemantics] isn't true, then the associated call to
   /// [markNeedsSemanticsUpdate] must not have `onlyChanges` set, as it is
   /// possible that the node should be entirely removed.
-  SemanticAnnotator get semanticAnnotator => null;
+  SemanticsAnnotator get semanticsAnnotator => null;
 
 
   // EVENTS
 
   /// Override this method to handle pointer events that hit this render object.
   @override
-  void handleEvent(PointerEvent event, HitTestEntry entry) { }
+  void handleEvent(PointerEvent event, @checked HitTestEntry entry) { }
 
 
   // HIT TESTING

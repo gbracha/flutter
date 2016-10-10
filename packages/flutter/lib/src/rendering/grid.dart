@@ -196,14 +196,17 @@ abstract class GridDelegate {
   /// [placementData] associated with that child as context. The returned
   /// [GridChildPlacement] is then used to determine the size and position of
   /// that child within the grid.
-  GridChildPlacement getChildPlacement(GridSpecification specification, int index, Object placementData);
+  GridChildPlacement getChildPlacement(GridSpecification specification, int index, @checked Object placementData);
 
   /// Override this method to return true when the children need to be laid out.
-  bool shouldRelayout(GridDelegate oldDelegate) => true;
+  bool shouldRelayout(@checked GridDelegate oldDelegate) => true;
 
   Size _getGridSize(BoxConstraints constraints, int childCount) {
     return getGridSpecification(constraints, childCount).gridSize;
   }
+
+  /// Insets for the entire grid.
+  EdgeInsets get padding => EdgeInsets.zero;
 
   // TODO(ianh): It's a bit dubious to be using the getSize function from the delegate to
   // figure out the intrinsic dimensions. We really should either not support intrinsics,
@@ -301,6 +304,7 @@ abstract class GridDelegateWithInOrderChildPlacement extends GridDelegate {
   final double rowSpacing;
 
   /// Insets for the entire grid.
+  @override
   final EdgeInsets padding;
 
   @override
@@ -637,8 +641,18 @@ class RenderGrid extends RenderVirtualViewport<GridParentData> {
     if (callback != null)
       invokeLayoutCallback(callback);
 
-    final double gridTopPadding = _specification.padding.top;
-    final double gridLeftPadding = _specification.padding.left;
+    double gridTopPadding = 0.0;
+    double gridLeftPadding = 0.0;
+
+    switch (mainAxis) {
+      case Axis.vertical:
+        gridLeftPadding = _specification.padding.left;
+        break;
+      case Axis.horizontal:
+        gridTopPadding = _specification.padding.top;
+        break;
+    }
+
     int childIndex = virtualChildBase;
     RenderBox child = firstChild;
     while (child != null) {

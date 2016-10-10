@@ -12,13 +12,17 @@ import 'colors.dart';
 import 'material.dart';
 import 'theme.dart';
 
-/// A material design dialog
+/// A material design dialog.
 ///
-/// Typically passed as the child widget to [showDialog], which displays the
-/// dialog.
+/// This dialog widget does not have any opinion about the contents of the
+/// dialog. Rather than using this widget directly, consider using [AlertDialog]
+/// or [SimpleDialog], which implement specific kinds of material design
+/// dialogs.
 ///
 /// See also:
 ///
+///  * [AlertDialog]
+///  * [SimpleDialog]
 ///  * [showDialog]
 ///  * <https://www.google.com/design/spec/components/dialogs.html>
 class Dialog extends StatelessWidget {
@@ -26,6 +30,71 @@ class Dialog extends StatelessWidget {
   ///
   /// Typically used in conjunction with [showDialog].
   Dialog({
+    Key key,
+    this.child,
+  }) : super(key: key);
+
+  final Widget child;
+
+  Color _getColor(BuildContext context) {
+    Brightness brightness = Theme.of(context).brightness;
+    assert(brightness != null);
+    switch (brightness) {
+      case Brightness.light:
+        return Colors.white;
+      case Brightness.dark:
+        return Colors.grey[800];
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return new Center(
+      child: new Container(
+        margin: new EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
+        child: new ConstrainedBox(
+          constraints: new BoxConstraints(minWidth: 280.0),
+          child: new Material(
+            elevation: 24,
+            color: _getColor(context),
+            type: MaterialType.card,
+            child: child
+          )
+        )
+      )
+    );
+  }
+}
+
+/// A material design alert dialog.
+///
+/// An alert dialog informs the user about situations that require
+/// acknowledgement. An alert dialog has an optional title and an optional list
+/// of actions. The title is displayed above the content and the actions are
+/// displayed below the content.
+///
+/// If the content is too large to fit on the screen vertically, the dialog will
+/// display the title and the actions and let the content overflow. Consider
+/// using a scrolling widget, such as [Block], for [content] to avoid overflow.
+///
+/// For dialogs that offer the user a choice between several options, consider
+/// using a [SimpleDialog].
+///
+/// Typically passed as the child widget to [showDialog], which displays the
+/// dialog.
+///
+/// See also:
+///
+///  * [SimpleDialog]
+///  * [Dialog]
+///  * [showDialog]
+///  * <https://material.google.com/components/dialogs.html#dialogs-alerts>
+class AlertDialog extends StatelessWidget {
+  /// Creates an alert dialog.
+  ///
+  /// Typically used in conjunction with [showDialog].
+  AlertDialog({
     Key key,
     this.title,
     this.titlePadding,
@@ -67,28 +136,13 @@ class Dialog extends StatelessWidget {
   /// These widgets will be wrapped in a [ButtonBar].
   final List<Widget> actions;
 
-  Color _getColor(BuildContext context) {
-    Brightness brightness = Theme.of(context).brightness;
-    switch (brightness) {
-      case Brightness.light:
-        return Colors.white;
-      case Brightness.dark:
-        return Colors.grey[800];
-    }
-    assert(brightness != null);
-    return null;
-  }
-
   @override
   Widget build(BuildContext context) {
-    List<Widget> dialogBody = new List<Widget>();
+    final List<Widget> children = new List<Widget>();
 
     if (title != null) {
-      EdgeInsets padding = titlePadding;
-      if (padding == null)
-        padding = new EdgeInsets.fromLTRB(24.0, 24.0, 24.0, content == null ? 20.0 : 0.0);
-      dialogBody.add(new Padding(
-        padding: padding,
+      children.add(new Padding(
+        padding: titlePadding ?? new EdgeInsets.fromLTRB(24.0, 24.0, 24.0, content == null ? 20.0 : 0.0),
         child: new DefaultTextStyle(
           style: Theme.of(context).textTheme.title,
           child: title
@@ -97,39 +151,124 @@ class Dialog extends StatelessWidget {
     }
 
     if (content != null) {
-      EdgeInsets padding = contentPadding;
-      if (padding == null)
-        padding = const EdgeInsets.fromLTRB(24.0, 20.0, 24.0, 24.0);
-      dialogBody.add(new Padding(
-        padding: padding,
-        child: new DefaultTextStyle(
-          style: Theme.of(context).textTheme.subhead,
-          child: content
+      children.add(new Flexible(
+        fit: FlexFit.loose,
+        child: new Padding(
+          padding: contentPadding ?? const EdgeInsets.fromLTRB(24.0, 20.0, 24.0, 24.0),
+          child: new DefaultTextStyle(
+            style: Theme.of(context).textTheme.subhead,
+            child: content
+          )
         )
       ));
     }
 
     if (actions != null) {
-      dialogBody.add(new ButtonTheme.bar(
+      children.add(new ButtonTheme.bar(
         child: new ButtonBar(
-          alignment: MainAxisAlignment.end,
           children: actions
         )
       ));
     }
 
-    return new Center(
-      child: new Container(
-        margin: new EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
+    return new Dialog(
+      child: new IntrinsicWidth(
+        child: new Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children
+        )
+      )
+    );
+  }
+}
+
+/// A simple material design dialog.
+///
+/// A simple dialog offers the user a choice between several options. A simple
+/// dialog has an optional title that is displayed above the choices.
+///
+/// For dialogs that inform the user about a situation, consider using an
+/// [AlertDialog].
+///
+/// Typically passed as the child widget to [showDialog], which displays the
+/// dialog.
+///
+/// See also:
+///
+///  * [AlertDialog]
+///  * [Dialog]
+///  * [showDialog]
+///  * <https://material.google.com/components/dialogs.html#dialogs-simple-dialogs>
+class SimpleDialog extends StatelessWidget {
+  /// Creates a simple dialog.
+  ///
+  /// Typically used in conjunction with [showDialog].
+  SimpleDialog({
+    Key key,
+    this.title,
+    this.titlePadding,
+    this.children,
+    this.contentPadding,
+  }) : super(key: key);
+
+  /// The (optional) title of the dialog is displayed in a large font at the top
+  /// of the dialog.
+  ///
+  /// Typically a [Text] widget.
+  final Widget title;
+
+  /// Padding around the title.
+  ///
+  /// Uses material design default if none is supplied. If there is no title, no
+  /// padding will be provided.
+  final EdgeInsets titlePadding;
+
+  /// The (optional) content of the dialog is displayed in a [Block] underneath
+  /// the title.
+  ///
+  /// The children are assumed to have 8.0 pixels of vertical and 24.0 pixels of
+  /// horizontal padding internally.
+  final List<Widget> children;
+
+  /// Padding around the content.
+  ///
+  /// Uses material design default if none is supplied.
+  final EdgeInsets contentPadding;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> body = <Widget>[];
+
+    if (title != null) {
+      body.add(new Padding(
+        padding: titlePadding ?? const EdgeInsets.fromLTRB(24.0, 24.0, 24.0, 0.0),
+        child: new DefaultTextStyle(
+          style: Theme.of(context).textTheme.title,
+          child: title
+        )
+      ));
+    }
+
+    if (children != null) {
+      body.add(new Flexible(
+        fit: FlexFit.loose,
+        child: new Block(
+          padding: contentPadding ?? const EdgeInsets.fromLTRB(0.0, 12.0, 0.0, 16.0),
+          children: children
+        )
+      ));
+    }
+
+    return new Dialog(
+      child: new IntrinsicWidth(
+        stepWidth: 56.0,
         child: new ConstrainedBox(
-          constraints: new BoxConstraints(minWidth: 280.0),
-          child: new Material(
-            elevation: 24,
-            color: _getColor(context),
-            type: MaterialType.card,
-            child: new IntrinsicWidth(
-              child: new Block(children: dialogBody)
-            )
+          constraints: const BoxConstraints(minWidth: 280.0),
+          child: new Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: body
           )
         )
       )
@@ -140,10 +279,12 @@ class Dialog extends StatelessWidget {
 class _DialogRoute<T> extends PopupRoute<T> {
   _DialogRoute({
     Completer<T> completer,
-    this.child
+    this.child,
+    this.theme,
   }) : super(completer: completer);
 
   final Widget child;
+  final ThemeData theme;
 
   @override
   Duration get transitionDuration => const Duration(milliseconds: 150);
@@ -156,7 +297,7 @@ class _DialogRoute<T> extends PopupRoute<T> {
 
   @override
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> forwardAnimation) {
-    return child;
+    return theme != null ? new Theme(data: theme, child: child) : child;
   }
 
   @override
@@ -184,6 +325,10 @@ class _DialogRoute<T> extends PopupRoute<T> {
 ///  * <https://www.google.com/design/spec/components/dialogs.html>
 Future<dynamic/*=T*/> showDialog/*<T>*/({ BuildContext context, Widget child }) {
   Completer<dynamic/*=T*/> completer = new Completer<dynamic/*=T*/>();
-  Navigator.push(context, new _DialogRoute<dynamic/*=T*/>(completer: completer, child: child));
+  Navigator.push(context, new _DialogRoute<dynamic/*=T*/>(
+    completer: completer,
+    child: child,
+    theme: Theme.of(context, shadowThemeOnly: true),
+  ));
   return completer.future;
 }

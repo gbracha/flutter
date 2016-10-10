@@ -196,4 +196,81 @@ void main() {
     await tester.pump(new Duration(seconds: 1));
     expect(scrollableKey.currentState.scrollOffset, equals(500.0));
   });
+
+  testWidgets('Bottom sheet cannot overlap app bar', (WidgetTester tester) async {
+    Key sheetKey = new UniqueKey();
+
+    await tester.pumpWidget(
+      new MaterialApp(
+        theme: new ThemeData(platform: TargetPlatform.android),
+        home: new Scaffold(
+          appBar: new AppBar(
+            title: new Text('Title')
+          ),
+          body: new Builder(
+            builder: (BuildContext context) {
+              return new GestureDetector(
+                onTap: () {
+                  Scaffold.of(context).showBottomSheet((BuildContext context) {
+                    return new Container(
+                      key: sheetKey,
+                      decoration: new BoxDecoration(backgroundColor: Colors.blue[500])
+                    );
+                  });
+                },
+                child: new Text('X')
+              );
+            }
+          )
+        )
+      )
+    );
+
+    await tester.tap(find.text('X'));
+    await tester.pump(); // start animation
+    await tester.pump(const Duration(seconds: 1));
+
+    RenderBox appBarBox = tester.renderObject(find.byType(AppBar));
+    RenderBox sheetBox = tester.renderObject(find.byKey(sheetKey));
+
+    Point appBarBottomRight = appBarBox.localToGlobal(appBarBox.size.bottomRight(Point.origin));
+    Point sheetTopRight = sheetBox.localToGlobal(sheetBox.size.topRight(Point.origin));
+
+    expect(appBarBottomRight, equals(sheetTopRight));
+  });
+
+  group('back arrow', () {
+    Future<Null> expectBackIcon(WidgetTester tester, TargetPlatform platform, IconData expectedIcon) async {
+      GlobalKey rootKey = new GlobalKey();
+      final Map<String, WidgetBuilder> routes = <String, WidgetBuilder>{
+        '/': (_) => new Container(key: rootKey, child: new Text('Home')),
+        '/scaffold': (_) => new Scaffold(
+            appBar: new AppBar(),
+            body: new Text('Scaffold'),
+        )
+      };
+      await tester.pumpWidget(
+        new MaterialApp(theme: new ThemeData(platform: platform), routes: routes)
+      );
+
+      Navigator.pushNamed(rootKey.currentContext, '/scaffold');
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+
+      Icon icon = tester.widget(find.byType(Icon));
+      expect(icon.icon, expectedIcon);
+    }
+
+    testWidgets('Back arrow uses correct default on Android', (WidgetTester tester) async {
+      await expectBackIcon(tester, TargetPlatform.android, Icons.arrow_back);
+    });
+
+    testWidgets('Back arrow uses correct default on Fuchsia', (WidgetTester tester) async {
+      await expectBackIcon(tester, TargetPlatform.fuchsia, Icons.arrow_back);
+    });
+
+    testWidgets('Back arrow uses correct default on iOS', (WidgetTester tester) async {
+      await expectBackIcon(tester, TargetPlatform.iOS, Icons.arrow_back_ios);
+    });
+  });
 }

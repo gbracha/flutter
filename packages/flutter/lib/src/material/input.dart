@@ -14,7 +14,7 @@ import 'material.dart';
 import 'text_selection.dart';
 import 'theme.dart';
 
-export 'package:sky_services/editing/editing.mojom.dart' show KeyboardType;
+export 'package:flutter_services/editing.dart' show KeyboardType;
 
 /// A material design text input field.
 ///
@@ -23,6 +23,10 @@ export 'package:sky_services/editing/editing.mojom.dart' show KeyboardType;
 /// See also:
 ///
 ///  * <https://www.google.com/design/spec/components/text-fields.html>
+///
+/// For a detailed guide on using the input widget, see:
+///
+/// * <https://flutter.io/text-input/>
 class Input extends StatefulWidget {
   /// Creates a text input field.
   ///
@@ -39,6 +43,7 @@ class Input extends StatefulWidget {
     this.hideText: false,
     this.isDense: false,
     this.autofocus: false,
+    this.multiline: false,
     this.formField,
     this.onChanged,
     this.onSubmitted
@@ -80,6 +85,10 @@ class Input extends StatefulWidget {
   /// Whether this input field should focus itself is nothing else is already focused.
   final bool autofocus;
 
+  /// True if the text should wrap and span multiple lines, false if it should
+  /// stay on a single line and scroll when overflowed.
+  final bool multiline;
+
   /// Form-specific data, required if this Input is part of a Form.
   final FormField<String> formField;
 
@@ -112,9 +121,9 @@ class _InputState extends State<Input> {
     bool focused = focusContext != null && Focus.at(focusContext, autofocus: config.autofocus);
     if (_formData == null)
       _formData = _FormFieldData.maybeCreate(context, this);
-    InputValue value = config.value ?? _formData?.value ?? InputValue.empty;
-    ValueChanged<InputValue> onChanged = config.onChanged ?? _formData?.onChanged;
-    ValueChanged<InputValue> onSubmitted = config.onSubmitted ?? _formData?.onSubmitted;
+    InputValue value =  _formData?.value ?? config.value ?? InputValue.empty;
+    ValueChanged<InputValue> onChanged = _formData?.onChanged ?? config.onChanged;
+    ValueChanged<InputValue> onSubmitted = _formData?.onSubmitted ?? config.onSubmitted;
     String errorText = config.errorText;
 
     if (errorText == null && config.formField != null && config.formField.validator != null)
@@ -201,10 +210,10 @@ class _InputState extends State<Input> {
         focusKey: focusKey,
         style: textStyle,
         hideText: config.hideText,
+        multiline: config.multiline,
         cursorColor: themeData.textSelectionColor,
         selectionColor: themeData.textSelectionColor,
-        selectionHandleBuilder: buildTextSelectionHandle,
-        selectionToolbarBuilder: buildTextSelectionToolbar,
+        selectionControls: materialTextSelectionControls,
         platform: Theme.of(context).platform,
         keyboardType: config.keyboardType,
         onChanged: onChanged,
@@ -246,12 +255,14 @@ class _InputState extends State<Input> {
       );
     }
 
-    return new GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: () => _rawInputLineKey.currentState?.requestKeyboard(),
-      child: new Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: child
+    return new RepaintBoundary(
+      child: new GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _rawInputLineKey.currentState?.requestKeyboard(),
+        child: new Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: child
+        )
       )
     );
   }
@@ -260,9 +271,10 @@ class _InputState extends State<Input> {
 class _FormFieldData {
   _FormFieldData(this.inputState) {
     assert(field != null);
+    value = inputState.config.value ?? new InputValue();
   }
 
-  InputValue value = new InputValue();
+  InputValue value;
   final _InputState inputState;
   FormField<String> get field => inputState.config.formField;
 
@@ -285,7 +297,8 @@ class _FormFieldData {
   void onSubmitted(InputValue value) {
     FormScope scope = FormScope.of(inputState.context);
     assert(scope != null);
-    scope.form.onSubmitted();
+    if (scope.form.onSubmitted != null)
+      scope.form.onSubmitted();
     scope.onFieldChanged();
   }
 }

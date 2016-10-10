@@ -209,6 +209,46 @@ class BoxConstraints extends Constraints {
     return result;
   }
 
+  /// Returns a size that attempts to meet the following conditions, in order:
+  ///
+  ///  - The size must satisfy these constraints.
+  ///  - The aspect ratio of the returned size matches the aspect ratio of the
+  ///    given size.
+  ///  - The returned size as big as possible while still being equal to or
+  ///    smaller than the given size.
+  Size constrainSizeAndAttemptToPreserveAspectRatio(Size size) {
+    if (isTight)
+      return smallest;
+
+    double width = size.width;
+    double height = size.height;
+    assert(width > 0.0);
+    assert(height > 0.0);
+    double aspectRatio = width / height;
+
+    if (width > maxWidth) {
+      width = maxWidth;
+      height = width / aspectRatio;
+    }
+
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * aspectRatio;
+    }
+
+    if (width < minWidth) {
+      width = minWidth;
+      height = width / aspectRatio;
+    }
+
+    if (height < minHeight) {
+      height = minHeight;
+      width = height * aspectRatio;
+    }
+
+    return new Size(constrainWidth(width), constrainHeight(height));
+  }
+
   /// The biggest size that satisifes the constraints.
   Size get biggest => new Size(constrainWidth(), constrainHeight());
 
@@ -1229,6 +1269,13 @@ abstract class RenderBox extends RenderObject {
   /// The caller is responsible for transforming [position] into the local
   /// coordinate space of the callee.  The callee is responsible for checking
   /// whether the given position is within its bounds.
+  ///
+  /// Hit testing requires layout to be up-to-date but does not require painting
+  /// to be up-to-date. That means a render object can rely upon [performLayout]
+  /// having been called in [hitTest] but cannot rely upon [paint] having been
+  /// called. For example, a render object might be a child of a [RenderOpacity]
+  /// object, which calls [hitTest] on its children when its opacity is zero
+  /// even through it does not [paint] its children.
   bool hitTest(HitTestResult result, { @required Point position }) {
     assert(() {
       if (needsLayout) {
@@ -1292,7 +1339,8 @@ abstract class RenderBox extends RenderObject {
   /// function to factor those transforms into the calculation.
   ///
   /// The RenderBox implementation takes care of adjusting the matrix for the
-  /// position of the given child.
+  /// position of the given child as determined during layout and stored on the
+  /// child's [parentData] in the [BoxParentData.offset] field.
   @override
   void applyPaintTransform(RenderObject child, Matrix4 transform) {
     assert(child.parent == this);
@@ -1301,20 +1349,24 @@ abstract class RenderBox extends RenderObject {
     transform.translate(offset.dx, offset.dy);
   }
 
+  Matrix4 _collectPaintTransform() {
+    assert(attached);
+    final List<RenderObject> renderers = <RenderObject>[];
+    for (RenderObject renderer = this; renderer != null; renderer = renderer.parent)
+      renderers.add(renderer);
+    final Matrix4 transform = new Matrix4.identity();
+    for (int index = renderers.length - 1; index > 0; index -= 1)
+      renderers[index].applyPaintTransform(renderers[index - 1], transform);
+    return transform;
+  }
+
   /// Convert the given point from the global coodinate system to the local
   /// coordinate system for this box.
   ///
   /// If the transform from global coordinates to local coordinates is
   /// degenerate, this function returns Point.origin.
   Point globalToLocal(Point point) {
-    assert(attached);
-    Matrix4 transform = new Matrix4.identity();
-    RenderObject renderer = this;
-    while (renderer.parent is RenderObject) {
-      RenderObject rendererParent = renderer.parent;
-      rendererParent.applyPaintTransform(renderer, transform);
-      renderer = rendererParent;
-    }
+    final Matrix4 transform = _collectPaintTransform();
     double det = transform.invert();
     if (det == 0.0)
       return Point.origin;
@@ -1324,13 +1376,7 @@ abstract class RenderBox extends RenderObject {
   /// Convert the given point from the local coordinate system for this box to
   /// the global coordinate system.
   Point localToGlobal(Point point) {
-    List<RenderObject> renderers = <RenderObject>[];
-    for (RenderObject renderer = this; renderer != null; renderer = renderer.parent)
-      renderers.add(renderer);
-    Matrix4 transform = new Matrix4.identity();
-    for (int index = renderers.length - 1; index > 0; index -= 1)
-      renderers[index].applyPaintTransform(renderers[index - 1], transform);
-    return MatrixUtils.transformPoint(transform, point);
+    return MatrixUtils.transformPoint(_collectPaintTransform(), point);
   }
 
   /// Returns a rectangle that contains all the pixels painted by this box.

@@ -8,6 +8,7 @@ import 'package:flutter/widgets.dart';
 
 import 'colors.dart';
 import 'material.dart';
+import 'theme.dart';
 
 const Duration _kBottomSheetDuration = const Duration(milliseconds: 200);
 const double _kMinFlingVelocity = 700.0;
@@ -78,10 +79,11 @@ class BottomSheet extends StatefulWidget {
   _BottomSheetState createState() => new _BottomSheetState();
 
   /// Creates an animation controller suitable for controlling a [BottomSheet].
-  static AnimationController createAnimationController() {
+  static AnimationController createAnimationController(TickerProvider vsync) {
     return new AnimationController(
       duration: _kBottomSheetDuration,
-      debugLabel: 'BottomSheet'
+      debugLabel: 'BottomSheet',
+      vsync: vsync,
     );
   }
 }
@@ -203,10 +205,12 @@ class _ModalBottomSheetState<T> extends State<_ModalBottomSheet<T>> {
 class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
   _ModalBottomSheetRoute({
     Completer<T> completer,
-    this.builder
+    this.builder,
+    this.theme,
   }) : super(completer: completer);
 
   final WidgetBuilder builder;
+  final ThemeData theme;
 
   @override
   Duration get transitionDuration => _kBottomSheetDuration;
@@ -222,13 +226,16 @@ class _ModalBottomSheetRoute<T> extends PopupRoute<T> {
   @override
   AnimationController createAnimationController() {
     assert(_animationController == null);
-    _animationController = BottomSheet.createAnimationController();
+    _animationController = BottomSheet.createAnimationController(navigator.overlay);
     return _animationController;
   }
 
   @override
   Widget buildPage(BuildContext context, Animation<double> animation, Animation<double> forwardAnimation) {
-    return new _ModalBottomSheet<T>(route: this);
+    Widget bottomSheet = new _ModalBottomSheet<T>(route: this);
+    if (theme != null)
+      bottomSheet = new Theme(data: theme, child: bottomSheet);
+    return bottomSheet;
   }
 }
 
@@ -256,7 +263,8 @@ Future<dynamic/*=T*/> showModalBottomSheet/*<T>*/({ BuildContext context, Widget
   final Completer<dynamic/*=T*/> completer = new Completer<dynamic/*=T*/>();
   Navigator.push(context, new _ModalBottomSheetRoute<dynamic/*=T*/>(
     completer: completer,
-    builder: builder
+    builder: builder,
+    theme: Theme.of(context, shadowThemeOnly: true),
   ));
   return completer.future;
 }

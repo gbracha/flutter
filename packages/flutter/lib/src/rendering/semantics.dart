@@ -3,26 +3,17 @@
 // found in the LICENSE file.
 
 import 'dart:math' as math;
-import 'dart:ui' show Rect;
+import 'dart:ui' show Rect, SemanticsAction, SemanticsFlags;
 
+import 'package:flutter_services/semantics.dart' as mojom;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/painting.dart';
 import 'package:meta/meta.dart';
-import 'package:sky_services/semantics/semantics.mojom.dart' as mojom;
 import 'package:vector_math/vector_math_64.dart';
 
 import 'node.dart';
 
-enum SemanticAction {
-  tap,
-  longPress,
-  scrollLeft,
-  scrollRight,
-  scrollUp,
-  scrollDown,
-  increase,
-  decrease,
-}
+export 'dart:ui' show SemanticsAction;
 
 /// Interface for [RenderObject]s to implement when they want to support
 /// being tapped, etc.
@@ -31,31 +22,75 @@ enum SemanticAction {
 /// (e.g. [handleSemanticTap]() will only be called if
 /// [SemanticsNode.canBeTapped] is true, [handleSemanticScrollDown]() will only
 /// be called if [SemanticsNode.canBeScrolledVertically] is true, etc).
-abstract class SemanticActionHandler { // ignore: one_member_abstracts
-  void performAction(SemanticAction action);
+abstract class SemanticsActionHandler { // ignore: one_member_abstracts
+  /// Called when the object implementing this interface receives a
+  /// [SemanticsAction]. For example, if the user of an accessibility tool
+  /// instructs their device that they wish to tap a button, the [RenderObject]
+  /// behind that button would have its [performAction] method called with the
+  /// [SemanticsAction.tap] action.
+  void performAction(SemanticsAction action);
 }
 
-/// The type of function returned by [RenderObject.getSemanticAnnotators()].
+/// The type of function returned by [RenderObject.getSemanticsAnnotators()].
 ///
 /// These callbacks are called with the [SemanticsNode] object that
 /// corresponds to the [RenderObject]. (One [SemanticsNode] can
 /// correspond to multiple [RenderObject] objects.)
 ///
-/// See [RenderObject.getSemanticAnnotators()] for details on the
+/// See [RenderObject.getSemanticsAnnotators()] for details on the
 /// contract that semantic annotators must follow.
-typedef void SemanticAnnotator(SemanticsNode semantics);
-
-enum _SemanticFlags {
-  mergeAllDescendantsIntoThisNode,
-  inheritedMergeAllDescendantsIntoThisNode, // whether an ancestor had mergeAllDescendantsIntoThisNode set
-  hasCheckedState,
-  isChecked,
-}
+typedef void SemanticsAnnotator(SemanticsNode semantics);
 
 /// Signature for a function that is called for each [SemanticsNode].
 ///
 /// Return false to stop visiting nodes.
 typedef bool SemanticsNodeVisitor(SemanticsNode node);
+
+/// Summary information about a [SemanticsNode] object.
+///
+/// A semantics node might [SemanticsNode.mergeAllDescendantsIntoThisNode],
+/// which means the individual fields on the semantics node don't fully describe
+/// the semantics at that node. This data structure contains the full semantics
+/// for the node.
+///
+/// Typically obtained from [SemanticsNode.getSemanticsData].
+class SemanticsData {
+  /// Creates a semantics data object.
+  ///
+  /// The [flags], [actions], [label], and [rect] arguments must not be null.
+  const SemanticsData({
+    @required this.flags,
+    @required this.actions,
+    @required this.label,
+    @required this.rect,
+    this.transform
+  });
+
+  /// A bit field of [SemanticsFlags] that apply to this node.
+  final int flags;
+
+  /// A bit field of [SemanticsActions] that apply to this node.
+  final int actions;
+
+  /// A textual description of this node.
+  final String label;
+
+  /// The bounding box for this node in its coordinate system.
+  final Rect rect;
+
+  /// The transform from this node's coordinate system to its parent's coordinate system.
+  ///
+  /// By default, the transform is null, which represents the identity
+  /// transformation (i.e., that this node has the same coorinate system as its
+  /// parent).
+  final Matrix4 transform;
+
+  /// Whether [flags] contains the given flag.
+  bool hasFlag(SemanticsFlags flag) => (flags & flag.index) != 0;
+
+  /// Whether [actions] contains the given action.
+  bool hasAction(SemanticsAction action) => (actions & action.index) != 0;
+}
 
 /// A node that represents some semantic data.
 ///
@@ -69,17 +104,17 @@ class SemanticsNode extends AbstractNode {
   /// Each semantic node has a unique identifier that is assigned when the node
   /// is created.
   SemanticsNode({
-    SemanticActionHandler handler
-  }) : _id = _generateNewId(),
+    SemanticsActionHandler handler
+  }) : id = _generateNewId(),
        _actionHandler = handler;
 
   /// Creates a semantic node to represent the root of the semantics tree.
   ///
   /// The root node is assigned an identifier of zero.
   SemanticsNode.root({
-    SemanticActionHandler handler,
+    SemanticsActionHandler handler,
     SemanticsOwner owner
-  }) : _id = 0,
+  }) : id = 0,
        _actionHandler = handler {
     attach(owner);
   }
@@ -90,9 +125,13 @@ class SemanticsNode extends AbstractNode {
     return _lastIdentifier;
   }
 
-  final int _id;
-  final SemanticActionHandler _actionHandler;
+  /// The unique identifier for this node.
+  ///
+  /// The root node has an id of zero. Other nodes are given a unique id when
+  /// they are created.
+  final int id;
 
+  final SemanticsActionHandler _actionHandler;
 
   // GEOMETRY
   // These are automatically handled by RenderObject's own logic
@@ -127,69 +166,91 @@ class SemanticsNode extends AbstractNode {
 
 
   // FLAGS AND LABELS
-  // These are supposed to be set by SemanticAnnotator obtained from getSemanticAnnotators
+  // These are supposed to be set by SemanticsAnnotator obtained from getSemanticsAnnotators
 
-  final Set<SemanticAction> _actions = new Set<SemanticAction>();
+  int _actions = 0;
 
   /// Adds the given action to the set of semantic actions.
   ///
   /// If the user chooses to perform an action,
-  /// [SemanticActionHandler.performAction] will be called with the chosen
+  /// [SemanticsActionHandler.performAction] will be called with the chosen
   /// action.
-  void addAction(SemanticAction action) {
-    if (_actions.add(action))
-      _markDirty();
-  }
-
-  /// Adds the [SemanticAction.scrollLeft] and [SemanticAction.scrollRight] actions.
-  void addHorizontalScrollingActions() {
-    addAction(SemanticAction.scrollLeft);
-    addAction(SemanticAction.scrollRight);
-  }
-
-  /// Adds the [SemanticAction.scrollUp] and [SemanticAction.scrollDown] actions.
-  void addVerticalScrollingActions() {
-    addAction(SemanticAction.scrollUp);
-    addAction(SemanticAction.scrollDown);
-  }
-
-  /// Adds the [SemanticAction.increase] and [SemanticAction.decrease] actions.
-  void addAdjustmentActions() {
-    addAction(SemanticAction.increase);
-    addAction(SemanticAction.decrease);
-  }
-
-  bool _hasAction(SemanticAction action) {
-    return _actionHandler != null && _actions.contains(action);
-  }
-
-  BitField<_SemanticFlags> _flags = new BitField<_SemanticFlags>.filled(_SemanticFlags.values.length, false);
-
-  void _setFlag(_SemanticFlags flag, bool value, { bool needsHandler: false }) {
-    assert(value != null);
-    assert((!needsHandler) || (_actionHandler != null) || (value == false));
-    if (_flags[flag] != value) {
-      _flags[flag] = value;
+  void addAction(SemanticsAction action) {
+    final int index = action.index;
+    if ((_actions & index) == 0) {
+      _actions |= index;
       _markDirty();
     }
   }
 
-  /// Whether all this node and all of its descendants should be treated as one logical entity.
-  bool get mergeAllDescendantsIntoThisNode => _flags[_SemanticFlags.mergeAllDescendantsIntoThisNode];
-  set mergeAllDescendantsIntoThisNode(bool value) => _setFlag(_SemanticFlags.mergeAllDescendantsIntoThisNode, value);
+  /// Adds the [SemanticsAction.scrollLeft] and [SemanticsAction.scrollRight] actions.
+  void addHorizontalScrollingActions() {
+    addAction(SemanticsAction.scrollLeft);
+    addAction(SemanticsAction.scrollRight);
+  }
 
-  bool get _inheritedMergeAllDescendantsIntoThisNode => _flags[_SemanticFlags.inheritedMergeAllDescendantsIntoThisNode];
-  set _inheritedMergeAllDescendantsIntoThisNode(bool value) => _setFlag(_SemanticFlags.inheritedMergeAllDescendantsIntoThisNode, value);
+  /// Adds the [SemanticsAction.scrollUp] and [SemanticsAction.scrollDown] actions.
+  void addVerticalScrollingActions() {
+    addAction(SemanticsAction.scrollUp);
+    addAction(SemanticsAction.scrollDown);
+  }
+
+  /// Adds the [SemanticsAction.increase] and [SemanticsAction.decrease] actions.
+  void addAdjustmentActions() {
+    addAction(SemanticsAction.increase);
+    addAction(SemanticsAction.decrease);
+  }
+
+  bool _canPerformAction(SemanticsAction action) {
+    return _actionHandler != null && (_actions & action.index) != 0;
+  }
+
+  /// Whether all this node and all of its descendants should be treated as one logical entity.
+  bool get mergeAllDescendantsIntoThisNode => _mergeAllDescendantsIntoThisNode;
+  bool _mergeAllDescendantsIntoThisNode = false;
+  set mergeAllDescendantsIntoThisNode(bool value) {
+    assert(value != null);
+    if (_mergeAllDescendantsIntoThisNode == value)
+      return;
+    _mergeAllDescendantsIntoThisNode = value;
+    _markDirty();
+  }
+
+  bool get _inheritedMergeAllDescendantsIntoThisNode => _inheritedMergeAllDescendantsIntoThisNodeValue;
+  bool _inheritedMergeAllDescendantsIntoThisNodeValue = false;
+  set _inheritedMergeAllDescendantsIntoThisNode(bool value) {
+    assert(value != null);
+    if (_inheritedMergeAllDescendantsIntoThisNodeValue == value)
+      return;
+    _inheritedMergeAllDescendantsIntoThisNodeValue = value;
+    _markDirty();
+  }
 
   bool get _shouldMergeAllDescendantsIntoThisNode => mergeAllDescendantsIntoThisNode || _inheritedMergeAllDescendantsIntoThisNode;
 
+  int _flags = 0;
+  void _setFlag(SemanticsFlags flag, bool value) {
+    final int index = flag.index;
+    if (value) {
+      if ((_flags & index) == 0) {
+        _flags |= index;
+        _markDirty();
+      }
+    } else {
+      if ((_flags & index) != 0) {
+        _flags &= ~index;
+        _markDirty();
+      }
+    }
+  }
+
   /// Whether this node has Boolean state that can be controlled by the user.
-  bool get hasCheckedState => _flags[_SemanticFlags.hasCheckedState];
-  set hasCheckedState(bool value) => _setFlag(_SemanticFlags.hasCheckedState, value);
+  bool get hasCheckedState => (_flags & SemanticsFlags.hasCheckedState.index) != 0;
+  set hasCheckedState(bool value) => _setFlag(SemanticsFlags.hasCheckedState, value);
 
   /// If this node has Boolean state that can be controlled by the user, whether that state is on or off, cooresponding to `true` and `false`, respectively.
-  bool get isChecked => _flags[_SemanticFlags.isChecked];
-  set isChecked(bool value) => _setFlag(_SemanticFlags.isChecked, value);
+  bool get isChecked => (_flags & SemanticsFlags.isChecked.index) != 0;
+  set isChecked(bool value) => _setFlag(SemanticsFlags.isChecked, value);
 
   /// A textual description of this node.
   String get label => _label;
@@ -205,10 +266,10 @@ class SemanticsNode extends AbstractNode {
   /// Restore this node to its default state.
   void reset() {
     bool hadInheritedMergeAllDescendantsIntoThisNode = _inheritedMergeAllDescendantsIntoThisNode;
-    _actions.clear();
-    _flags.reset();
+    _actions = 0;
+    _flags = 0;
     if (hadInheritedMergeAllDescendantsIntoThisNode)
-      _inheritedMergeAllDescendantsIntoThisNode = true;
+      _inheritedMergeAllDescendantsIntoThisNodeValue = true;
     _label = '';
     _markDirty();
   }
@@ -245,6 +306,20 @@ class SemanticsNode extends AbstractNode {
   /// Whether this node has a non-zero number of children.
   bool get hasChildren => _children?.isNotEmpty ?? false;
   bool _dead = false;
+
+  /// Visits the immediate children of this node.
+  ///
+  /// This function calls visitor for each child in a pre-order travseral
+  /// until visitor returns false. Returns true if all the visitor calls
+  /// returned true, otherwise returns false.
+  void visitChildren(SemanticsNodeVisitor visitor) {
+    if (_children != null) {
+      for (SemanticsNode child in _children) {
+        if (!visitor(child))
+          return;
+      }
+    }
+  }
 
   /// Called during the compilation phase after all the children of this node have been compiled.
   ///
@@ -312,9 +387,11 @@ class SemanticsNode extends AbstractNode {
     }
   }
 
-  // Visits all the descendants of this node, calling visitor for each one, until
-  // visitor returns false. Returns true if all the visitor calls returned true,
-  // otherwise returns false.
+  /// Visit all the descendants of this node.
+  ///
+  /// This function calls visitor for each descendant in a pre-order travseral
+  /// until visitor returns false. Returns true if all the visitor calls
+  /// returned true, otherwise returns false.
   bool _visitDescendants(SemanticsNodeVisitor visitor) {
     if (_children != null) {
       for (SemanticsNode child in _children) {
@@ -328,8 +405,8 @@ class SemanticsNode extends AbstractNode {
   @override
   void attach(SemanticsOwner owner) {
     super.attach(owner);
-    assert(!owner._nodes.containsKey(_id));
-    owner._nodes[_id] = this;
+    assert(!owner._nodes.containsKey(id));
+    owner._nodes[id] = this;
     owner._detachedNodes.remove(this);
     if (_dirty) {
       _dirty = false;
@@ -345,9 +422,9 @@ class SemanticsNode extends AbstractNode {
 
   @override
   void detach() {
-    assert(owner._nodes.containsKey(_id));
+    assert(owner._nodes.containsKey(id));
     assert(!owner._detachedNodes.contains(this));
-    owner._nodes.remove(_id);
+    owner._nodes.remove(id);
     owner._detachedNodes.add(this);
     super.detach();
     if (_children != null) {
@@ -367,9 +444,42 @@ class SemanticsNode extends AbstractNode {
     }
   }
 
+  /// Returns a summary of the semantics for this node.
+  ///
+  /// If this node has [mergeAllDescendantsIntoThisNode], then the returned data
+  /// includes the information from this node's descendants. Otherwise, the
+  /// returned data matches the data on this node.
+  SemanticsData getSemanticsData() {
+    int flags = _flags;
+    int actions = _actions;
+    String label = _label;
+
+    if (mergeAllDescendantsIntoThisNode) {
+      _visitDescendants((SemanticsNode node) {
+        flags |= node._flags;
+        actions |= node._actions;
+        if (node.label.isNotEmpty) {
+          if (label.isEmpty)
+            label = node.label;
+          else
+            label = '$label\n${node.label}';
+        }
+        return true;
+      });
+    }
+
+    return new SemanticsData(
+      flags: flags,
+      actions: actions,
+      label: label,
+      rect: rect,
+      transform: transform
+    );
+  }
+
   mojom.SemanticsNode _serialize() {
     mojom.SemanticsNode result = new mojom.SemanticsNode();
-    result.id = _id;
+    result.id = id;
     if (_dirty) {
       // We could be even more efficient about not sending data here, by only
       // sending the bits that are dirty (tracking the geometry, flags, strings,
@@ -386,11 +496,10 @@ class SemanticsNode extends AbstractNode {
       result.strings = new mojom.SemanticStrings();
       result.strings.label = label;
       List<mojom.SemanticsNode> children = <mojom.SemanticsNode>[];
-      Set<SemanticAction> mergedActions = new Set<SemanticAction>();
-      mergedActions.addAll(_actions);
+      int mergedActions = _actions;
       if (_shouldMergeAllDescendantsIntoThisNode) {
         _visitDescendants((SemanticsNode node) {
-          mergedActions.addAll(node._actions);
+          mergedActions |= node._actions;
           result.flags.hasCheckedState = result.flags.hasCheckedState || node.hasCheckedState;
           result.flags.isChecked = result.flags.isChecked || node.isChecked;
           if (node.label != '')
@@ -407,8 +516,11 @@ class SemanticsNode extends AbstractNode {
       }
       result.children = children;
       result.actions = <int>[];
-      for (SemanticAction action in mergedActions)
-        result.actions.add(action.index);
+      for (mojom.SemanticAction action in mojom.SemanticAction.values) {
+        int bit = 1 << action.mojoEnumValue;
+        if ((mergedActions & bit) != 0)
+          result.actions.add(action.mojoEnumValue);
+      }
       _dirty = false;
     }
     return result;
@@ -417,7 +529,7 @@ class SemanticsNode extends AbstractNode {
   @override
   String toString() {
     StringBuffer buffer = new StringBuffer();
-    buffer.write('$runtimeType($_id');
+    buffer.write('$runtimeType($id');
     if (_dirty)
       buffer.write(" (${ owner != null && owner._dirtyNodes.contains(this) ? 'dirty' : 'STALE' })");
     if (_shouldMergeAllDescendantsIntoThisNode)
@@ -425,8 +537,9 @@ class SemanticsNode extends AbstractNode {
     buffer.write('; $rect');
     if (wasAffectedByClip)
       buffer.write(' (clipped)');
-    for (SemanticAction action in _actions) {
-      buffer.write('; $action');
+    for (SemanticsAction action in SemanticsAction.values.values) {
+      if ((_actions & action.index) != 0)
+        buffer.write('; $action');
     }
     if (hasCheckedState) {
       if (isChecked)
@@ -482,6 +595,11 @@ class SemanticsOwner {
   final Set<SemanticsNode> _detachedNodes = new Set<SemanticsNode>();
 
   final List<SemanticsListener> _listeners = <SemanticsListener>[];
+
+  /// The root node of the semantics tree, if any.
+  ///
+  /// If the semantics tree is empty, returns null.
+  SemanticsNode get rootSemanticsNode => _nodes[0];
 
   /// Releases any resources retained by this object.
   ///
@@ -583,19 +701,18 @@ class SemanticsOwner {
     _dirtyNodes.clear();
   }
 
-  SemanticActionHandler _getSemanticActionHandlerForId(int id, { @required SemanticAction action }) {
-    assert(action != null);
+  SemanticsActionHandler _getSemanticsActionHandlerForId(int id, SemanticsAction action) {
     SemanticsNode result = _nodes[id];
-    if (result != null && result._shouldMergeAllDescendantsIntoThisNode && !result._hasAction(action)) {
+    if (result != null && result._shouldMergeAllDescendantsIntoThisNode && !result._canPerformAction(action)) {
       result._visitDescendants((SemanticsNode node) {
-        if (node._actionHandler != null && node._hasAction(action)) {
+        if (node._canPerformAction(action)) {
           result = node;
           return false; // found node, abort walk
         }
         return true; // continue walk
       });
     }
-    if (result == null || !result._hasAction(action))
+    if (result == null || !result._canPerformAction(action))
       return null;
     return result._actionHandler;
   }
@@ -604,8 +721,52 @@ class SemanticsOwner {
   ///
   /// If the [SemanticsNode] has not indicated that it can perform the action,
   /// this function does nothing.
-  void performAction(int id, SemanticAction action) {
-    SemanticActionHandler handler = _getSemanticActionHandlerForId(id, action: action);
+  void performAction(int id, SemanticsAction action) {
+    assert(action != null);
+    SemanticsActionHandler handler = _getSemanticsActionHandlerForId(id, action);
+    handler?.performAction(action);
+  }
+
+  SemanticsActionHandler _getSemanticsActionHandlerForPosition(SemanticsNode node, Point position, SemanticsAction action) {
+    if (node.transform != null) {
+      Matrix4 inverse = new Matrix4.identity();
+      if (inverse.copyInverse(node.transform) == 0.0)
+        return null;
+      position = MatrixUtils.transformPoint(inverse, position);
+    }
+    if (!node.rect.contains(position))
+      return null;
+    if (node.mergeAllDescendantsIntoThisNode) {
+      SemanticsNode result;
+      node._visitDescendants((SemanticsNode child) {
+        if (child._canPerformAction(action)) {
+          result = child;
+          return false;
+        }
+        return true;
+      });
+      return result?._actionHandler;
+    }
+    if (node.hasChildren) {
+      for (SemanticsNode child in node._children.reversed) {
+        SemanticsActionHandler handler = _getSemanticsActionHandlerForPosition(child, position, action);
+        if (handler != null)
+          return handler;
+      }
+    }
+    return node._canPerformAction(action) ? node._actionHandler : null;
+  }
+
+  /// Asks the [SemanticsNode] with at the given position to perform the given action.
+  ///
+  /// If the [SemanticsNode] has not indicated that it can perform the action,
+  /// this function does nothing.
+  void performActionAt(Point position, SemanticsAction action) {
+    assert(action != null);
+    final SemanticsNode node = rootSemanticsNode;
+    if (node == null)
+      return;
+    SemanticsActionHandler handler = _getSemanticsActionHandlerForPosition(node, position, action);
     handler?.performAction(action);
   }
 }

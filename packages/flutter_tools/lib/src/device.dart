@@ -182,7 +182,8 @@ abstract class Device {
     String mainPath,
     String route,
     DebuggingOptions debuggingOptions,
-    Map<String, dynamic> platformArgs
+    Map<String, dynamic> platformArgs,
+    bool prebuiltApplication: false
   });
 
   /// Does this device implement support for hot reloading / restarting?
@@ -205,7 +206,8 @@ abstract class Device {
     ApplicationPackage package,
     LaunchResult result, {
     String mainPath,
-    VMService observatory
+    VMService observatory,
+    bool prebuiltApplication: false
   }) async {
     throw 'unsupported';
   }
@@ -247,6 +249,10 @@ abstract class Device {
 
     return devices.map((Device device) {
       String supportIndicator = device.isSupported() ? '' : ' (unsupported)';
+      if (device.isLocalEmulator) {
+        String type = device.platform == TargetPlatform.ios ? 'simulator' : 'emulator';
+        supportIndicator += ' ($type)';
+      }
       return '${device.name.padRight(nameWidth)} • '
              '${device.id.padRight(idWidth)} • '
              '${getNameForTargetPlatform(device.platform)}$supportIndicator';

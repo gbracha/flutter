@@ -52,6 +52,7 @@ class MaterialApp extends StatefulWidget {
     this.theme,
     this.home,
     this.routes: const <String, WidgetBuilder>{},
+    this.initialRoute,
     this.onGenerateRoute,
     this.onLocaleChanged,
     this.debugShowMaterialGrid: false,
@@ -109,6 +110,11 @@ class MaterialApp extends StatefulWidget {
   /// by [home]), then the [onGenerateRoute] callback is called to
   /// build the page instead.
   final Map<String, WidgetBuilder> routes;
+
+  /// The name of the first route to show.
+  ///
+  /// Defaults to [Window.defaultRouteName].
+  final String initialRoute;
 
   /// The route generator callback used when the app is navigated to a
   /// named route.
@@ -173,8 +179,29 @@ class _ScrollLikeMountainViewDelegate extends ScrollConfigurationDelegate {
   @override
   ExtentScrollBehavior createScrollBehavior() => new OverscrollWhenScrollableBehavior(platform: TargetPlatform.android);
 
+  ScrollableEdge _overscrollIndicatorEdge(ScrollableEdge edge) {
+    switch (edge) {
+      case ScrollableEdge.leading:
+        return ScrollableEdge.trailing;
+      case ScrollableEdge.trailing:
+        return ScrollableEdge.leading;
+      case ScrollableEdge.both:
+        return ScrollableEdge.none;
+      case ScrollableEdge.none:
+        return ScrollableEdge.both;
+    }
+    return ScrollableEdge.both;
+  }
+
   @override
-  Widget wrapScrollWidget(Widget scrollWidget) => new OverscrollIndicator(child: scrollWidget);
+  Widget wrapScrollWidget(BuildContext context, Widget scrollWidget) {
+    // Only introduce an overscroll indicator for the edges of the scrollable
+    // that aren't already clamped.
+    return new OverscrollIndicator(
+      edge: _overscrollIndicatorEdge(ClampOverscrolls.of(context)?.edge),
+      child: scrollWidget
+    );
+  }
 
   @override
   bool updateShouldNotify(ScrollConfigurationDelegate old) => false;
@@ -225,6 +252,7 @@ class _MaterialAppState extends State<MaterialApp> {
     ThemeData theme = config.theme ?? new ThemeData.fallback();
     Widget result = new AnimatedTheme(
       data: theme,
+      isMaterialAppTheme: true,
       child: new WidgetsApp(
         key: new GlobalObjectKey(this),
         title: config.title,
@@ -232,6 +260,7 @@ class _MaterialAppState extends State<MaterialApp> {
         // blue[500] is the primary color of the default theme
         color: config.color ?? theme?.primaryColor ?? Colors.blue[500],
         navigatorObserver: _heroController,
+        initialRoute: config.initialRoute,
         onGenerateRoute: _onGenerateRoute,
         onLocaleChanged: config.onLocaleChanged,
         showPerformanceOverlay: config.showPerformanceOverlay,

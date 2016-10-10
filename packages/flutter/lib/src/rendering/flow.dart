@@ -2,7 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:flutter/animation.dart';
+import 'package:flutter/foundation.dart';
+import 'package:meta/meta.dart';
 import 'package:vector_math/vector_math_64.dart';
 
 import 'box.dart';
@@ -54,10 +55,10 @@ abstract class FlowPaintingContext {
 ///  * [Flow]
 ///  * [RenderFlow]
 abstract class FlowDelegate {
-  /// The flow will repaint whenever the [repaint] animation ticks.
-  const FlowDelegate({ Animation<dynamic> repaint }) : _repaint = repaint;
+  /// The flow will repaint whenever [repaint] notifies its listeners.
+  const FlowDelegate({ Listenable repaint }) : _repaint = repaint;
 
-  final Animation<dynamic> _repaint;
+  final Listenable _repaint;
 
   /// Override to control the size of the container for the children.
   ///
@@ -107,7 +108,7 @@ abstract class FlowDelegate {
   /// This should compare the fields of the current delegate and the given
   /// oldDelegate and return true if the fields are such that the layout would
   /// be different.
-  bool shouldRelayout(FlowDelegate oldDelegate) => false;
+  bool shouldRelayout(@checked FlowDelegate oldDelegate) => false;
 
   /// Override this method to return true when the children need to be
   /// repainted. This should compare the fields of the current delegate and the
@@ -122,7 +123,7 @@ abstract class FlowDelegate {
   /// The flow container might repaint even if this function returns false, for
   /// example if layout triggers painting (e.g., if [shouldRelayout] returns
   /// true).
-  bool shouldRepaint(FlowDelegate oldDelegate);
+  bool shouldRepaint(@checked FlowDelegate oldDelegate);
 
   /// Override this method to include additional information in the
   /// debugging data printed by [debugDumpRenderTree] and friends.
@@ -378,16 +379,14 @@ class RenderFlow extends RenderBox
       final Matrix4 transform = childParentData._transform;
       if (transform == null)
         continue;
-      Matrix4 inverse = new Matrix4.zero();
-      double determinate = inverse.copyInverse(transform);
+      final Matrix4 inverse = new Matrix4.zero();
+      final double determinate = inverse.copyInverse(transform);
       if (determinate == 0.0) {
         // We cannot invert the transform. That means the child doesn't appear
         // on screen and cannot be hit.
         continue;
       }
-      final Vector3 position3 = new Vector3(position.x, position.y, 0.0);
-      final Vector3 transformed3 = inverse.transform3(position3);
-      Point childPosition = new Point(transformed3.x, transformed3.y);
+      final Point childPosition = MatrixUtils.transformPoint(inverse, position);
       if (child.hitTest(result, position: childPosition))
         return true;
     }

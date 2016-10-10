@@ -43,6 +43,10 @@ ImageConfiguration createLocalImageConfiguration(BuildContext context, { Size si
 ///
 /// The image is painted using [paintImage], which describes the meanings of the
 /// various fields on this class in more detail.
+///
+/// See also:
+///
+///  * [Icon]
 class Image extends StatefulWidget {
   /// Creates a widget that displays an image.
   ///
@@ -129,7 +133,7 @@ class Image extends StatefulWidget {
   /// If non-null, apply this color filter to the image before painting.
   final Color color;
 
-  /// How to inscribe the image into the place allocated during layout.
+  /// How to inscribe the image into the space allocated during layout.
   ///
   /// The default varies based on the other fields. See the discussion at
   /// [paintImage].

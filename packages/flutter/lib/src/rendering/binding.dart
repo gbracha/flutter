@@ -10,7 +10,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:meta/meta.dart';
 import 'package:mojo/core.dart' as core;
-import 'package:sky_services/semantics/semantics.mojom.dart' as mojom;
+import 'package:flutter_services/semantics.dart' as mojom;
 
 import 'box.dart';
 import 'debug.dart';
@@ -26,7 +26,11 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   void initInstances() {
     super.initInstances();
     _instance = this;
-    _pipelineOwner = new PipelineOwner(onNeedVisualUpdate: ensureVisualUpdate);
+    _pipelineOwner = new PipelineOwner(
+      onNeedVisualUpdate: ensureVisualUpdate,
+      onScheduleInitialSemantics: _scheduleInitialSemantics,
+      onClearSemantics: _clearSemantics,
+    );
     ui.window.onMetricsChanged = handleMetricsChanged;
     initRenderView();
     initSemantics();
@@ -96,12 +100,12 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   PipelineOwner _pipelineOwner;
 
   /// The render tree that's attached to the output surface.
-  RenderView get renderView => _pipelineOwner.rootRenderObject;
+  RenderView get renderView => _pipelineOwner.rootNode;
   /// Sets the given [RenderView] object (which must not be null), and its tree, to
   /// be the new render tree to display. The previous tree, if any, is detached.
   set renderView(RenderView value) {
     assert(value != null);
-    _pipelineOwner.rootRenderObject = value;
+    _pipelineOwner.rootNode = value;
   }
 
   /// Called when the system metrics change.
@@ -123,9 +127,10 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   /// this to force the display into 800x600 when a test is run on the device
   /// using `flutter run`.
   ViewConfiguration createViewConfiguration() {
+    final double devicePixelRatio = ui.window.devicePixelRatio;
     return new ViewConfiguration(
-      size: ui.window.size,
-      devicePixelRatio: ui.window.devicePixelRatio
+      size: ui.window.physicalSize / devicePixelRatio,
+      devicePixelRatio: devicePixelRatio
     );
   }
 
@@ -182,7 +187,7 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   /// sent to the GPU.
   ///
   /// 6. The semantics phase: All the dirty [RenderObject]s in the system have
-  /// their semantics updated (see [RenderObject.semanticAnnotator]). This
+  /// their semantics updated (see [RenderObject.SemanticsAnnotator]). This
   /// generates the [SemanticsNode] tree. See
   /// [RenderObject.markNeedsSemanticsUpdate] for further details on marking an
   /// object dirty for semantics.
@@ -193,7 +198,7 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   /// then invokes post-frame callbacks (registered with [addPostFrameCallback].
   ///
   /// Some bindings (for example, the [WidgetsBinding]) add extra steps to this
-  /// list.
+  /// list (for example, see [WidgetsBinding.beginFrame]).
   //
   // When editing the above, also update widgets/binding.dart's copy.
   @protected
@@ -209,7 +214,7 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   @override
   void reassembleApplication() {
     super.reassembleApplication();
-    pipelineOwner.reassemble();
+    renderView.reassemble();
     handleBeginFrame(null);
   }
 
@@ -217,7 +222,8 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
   void hitTest(HitTestResult result, Point position) {
     assert(renderView != null);
     renderView.hitTest(result, position: position);
-    super.hitTest(result, position);
+    // This super call is safe since it will be bound to a mixed-in declaration.
+    super.hitTest(result, position); // ignore: abstract_super_member_reference
   }
 
   void _forceRepaint() {
@@ -227,6 +233,14 @@ abstract class RendererBinding extends BindingBase implements SchedulerBinding, 
       child.visitChildren(visitor);
     };
     instance?.renderView?.visitChildren(visitor);
+  }
+
+  void _scheduleInitialSemantics() {
+    renderView.scheduleInitialSemantics();
+  }
+
+  void _clearSemantics() {
+    renderView.clearSemantics();
   }
 }
 
@@ -275,13 +289,13 @@ class SemanticsServer extends mojom.SemanticsServer {
   }
 
   @override
-  void addSemanticsListener(mojom.SemanticsListenerProxy listener) {
+  void addSemanticsListener(@checked mojom.SemanticsListenerProxy listener) {
     _listeners.add(listener);
   }
 
   @override
   void performAction(int id, mojom.SemanticAction encodedAction) {
-    _semanticsOwner.performAction(id, SemanticAction.values[encodedAction.mojoEnumValue]);
+    _semanticsOwner.performAction(id, SemanticsAction.values[encodedAction.mojoEnumValue]);
   }
 }
 

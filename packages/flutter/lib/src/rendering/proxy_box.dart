@@ -4,8 +4,9 @@
 
 import 'dart:ui' as ui show ImageFilter;
 
-import 'package:flutter/animation.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/painting.dart';
 import 'package:meta/meta.dart';
 import 'package:vector_math/vector_math_64.dart';
 
@@ -872,7 +873,7 @@ abstract class CustomClipper<T> {
 
   /// Returns `true` if the new instance will result in a different clip
   /// than the oldClipper instance.
-  bool shouldRepaint(CustomClipper<T> oldClipper);
+  bool shouldRepaint(@checked CustomClipper<T> oldClipper);
 }
 
 abstract class _RenderCustomClip<T> extends RenderProxyBox {
@@ -941,6 +942,7 @@ class RenderClipRect extends _RenderCustomClip<Rect> {
   @override
   bool hitTest(HitTestResult result, { Point position }) {
     if (_clipper != null) {
+      _updateClip();
       assert(_clip != null);
       if (!_clip.contains(position))
         return false;
@@ -1033,6 +1035,7 @@ class RenderClipOval extends _RenderCustomClip<Rect> {
 
   @override
   bool hitTest(HitTestResult result, { Point position }) {
+    _updateClip();
     assert(_clip != null);
     Point center = _clip.center;
     // convert the position to an offset from the center of the unit circle
@@ -1082,6 +1085,7 @@ class RenderClipPath extends _RenderCustomClip<Path> {
   @override
   bool hitTest(HitTestResult result, { Point position }) {
     if (_clipper != null) {
+      _updateClip();
       assert(_clip != null);
       if (!_clip.contains(position))
         return false;
@@ -1364,9 +1368,7 @@ class RenderTransform extends RenderProxyBox {
         // doesn't appear on screen and cannot be hit.
         return false;
       }
-      Vector3 position3 = new Vector3(position.x, position.y, 0.0);
-      Vector3 transformed3 = inverse.transform3(position3);
-      position = new Point(transformed3.x, transformed3.y);
+      position = MatrixUtils.transformPoint(inverse, position);
     }
     return super.hitTest(result, position: position);
   }
@@ -1397,6 +1399,137 @@ class RenderTransform extends RenderProxyBox {
     description.add('origin: $origin');
     description.add('alignment: $alignment');
     description.add('transformHitTests: $transformHitTests');
+  }
+}
+
+/// Scales and positions its child within itself according to [fit].
+class RenderFittedBox extends RenderProxyBox {
+  /// Scales and positions its child within itself.
+  ///
+  /// The [fit] and [alignment] arguments must not be null.
+  RenderFittedBox({
+    RenderBox child,
+    ImageFit fit: ImageFit.contain,
+    FractionalOffset alignment: FractionalOffset.center
+  }) : _fit = fit, _alignment = alignment, super(child) {
+    assert(fit != null);
+    assert(alignment != null && alignment.dx != null && alignment.dy != null);
+  }
+
+  /// How to inscribe the child into the space allocated during layout.
+  ImageFit get fit => _fit;
+  ImageFit _fit;
+  set fit (ImageFit newFit) {
+    assert(newFit != null);
+    if (_fit == newFit)
+      return;
+    _fit = newFit;
+    _clearPaintData();
+    markNeedsPaint();
+  }
+
+  /// How to align the child within its parent's bounds.
+  ///
+  /// An alignment of (0.0, 0.0) aligns the child to the top-left corner of its
+  /// parent's bounds.  An alignment of (1.0, 0.5) aligns the child to the middle
+  /// of the right edge of its parent's bounds.
+  FractionalOffset get alignment => _alignment;
+  FractionalOffset _alignment;
+  set alignment (FractionalOffset newAlignment) {
+    assert(newAlignment != null && newAlignment.dx != null && newAlignment.dy != null);
+    if (_alignment == newAlignment)
+      return;
+    _alignment = newAlignment;
+    _clearPaintData();
+    markNeedsPaint();
+  }
+
+  @override
+  void performLayout() {
+    if (child != null) {
+      child.layout(const BoxConstraints(), parentUsesSize: true);
+      size = constraints.constrainSizeAndAttemptToPreserveAspectRatio(child.size);
+      _clearPaintData();
+    } else {
+      size = constraints.smallest;
+    }
+  }
+
+  bool _hasVisualOverflow;
+  Matrix4 _transform;
+
+  void _clearPaintData() {
+    _hasVisualOverflow = null;
+    _transform = null;
+  }
+
+  void _updatePaintData() {
+    if (_transform != null)
+      return;
+
+    if (child == null) {
+      _hasVisualOverflow = false;
+      _transform = new Matrix4.identity();
+    } else {
+      final Size childSize = child.size;
+      final FittedSizes sizes = applyImageFit(_fit, childSize, size);
+      final double scaleX = sizes.destination.width / sizes.source.width;
+      final double scaleY = sizes.destination.height / sizes.source.height;
+      final Rect sourceRect = _alignment.inscribe(sizes.source, Point.origin & childSize);
+      final Rect destinationRect = _alignment.inscribe(sizes.destination, Point.origin & size);
+      _hasVisualOverflow = sourceRect.width < childSize.width || sourceRect.height < childSize.width;
+      _transform = new Matrix4.translationValues(destinationRect.left, destinationRect.top, 0.0)
+        ..scale(scaleX, scaleY)
+        ..translate(-sourceRect.left, -sourceRect.top);
+    }
+  }
+
+  void _paintChildWithTransform(PaintingContext context, Offset offset) {
+    Offset childOffset = MatrixUtils.getAsTranslation(_transform);
+    if (childOffset == null)
+      context.pushTransform(needsCompositing, offset, _transform, super.paint);
+    else
+      super.paint(context, offset + childOffset);
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    _updatePaintData();
+    if (child != null) {
+      if (_hasVisualOverflow)
+        context.pushClipRect(needsCompositing, offset, Point.origin & size, _paintChildWithTransform);
+      else
+        _paintChildWithTransform(context, offset);
+    }
+  }
+
+  @override
+  bool hitTest(HitTestResult result, { Point position }) {
+    _updatePaintData();
+    Matrix4 inverse;
+    try {
+      inverse = new Matrix4.inverted(_transform);
+    } catch (e) {
+      // We cannot invert the effective transform. That means the child
+      // doesn't appear on screen and cannot be hit.
+      return false;
+    }
+    position = MatrixUtils.transformPoint(inverse, position);
+    return super.hitTest(result, position: position);
+  }
+
+  @override
+  void applyPaintTransform(RenderBox child, Matrix4 transform) {
+    _updatePaintData();
+    transform.multiply(_transform);
+    super.applyPaintTransform(child, transform);
+  }
+
+  @override
+  void debugFillDescription(List<String> description) {
+    super.debugFillDescription(description);
+    description.add('fit: $fit');
+    description.add('alignment: $alignment');
   }
 }
 
@@ -1490,10 +1623,10 @@ class RenderFractionalTranslation extends RenderProxyBox {
 abstract class CustomPainter {
   /// Creates a custom painter.
   ///
-  /// The painter will repaint whenever the [repaint] animation ticks.
-  const CustomPainter({ Animation<dynamic> repaint }) : _repaint = repaint;
+  /// The painter will repaint whenever [repaint] notifies its listeners.
+  const CustomPainter({ Listenable repaint }) : _repaint = repaint;
 
-  final Animation<dynamic> _repaint;
+  final Listenable _repaint;
 
   /// Called whenever the object needs to paint. The given [Canvas] has its
   /// coordinate space configured such that the origin is at the top left of the
@@ -1546,7 +1679,7 @@ abstract class CustomPainter {
   /// repaints should be avoided as much as possible, a [RepaintBoundary] or
   /// [RenderRepaintBoundary] (or other render object with [isRepaintBoundary]
   /// set to `true`) might be helpful.
-  bool shouldRepaint(CustomPainter oldDelegate);
+  bool shouldRepaint(@checked CustomPainter oldDelegate);
 
   /// Called whenever a hit test is being performed on an object that is using
   /// this custom paint delegate.
@@ -2188,7 +2321,7 @@ class RenderMetaData extends RenderProxyBoxWithHitTestBehavior {
 
 /// Listens for the specified gestures from the semantics server (e.g.
 /// an accessibility tool).
-class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticActionHandler {
+class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticsActionHandler {
   /// Creates a render object that listens for specific semantic gestures.
   ///
   /// The [scrollFactor] argument must not be null.
@@ -2273,13 +2406,13 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
   }
 
   @override
-  SemanticAnnotator get semanticAnnotator => isSemanticBoundary ? _annotate : null;
+  SemanticsAnnotator get semanticsAnnotator => isSemanticBoundary ? _annotate : null;
 
   void _annotate(SemanticsNode node) {
     if (onTap != null)
-      node.addAction(SemanticAction.tap);
+      node.addAction(SemanticsAction.tap);
     if (onLongPress != null)
-      node.addAction(SemanticAction.longPress);
+      node.addAction(SemanticsAction.longPress);
     if (onHorizontalDragUpdate != null)
       node.addHorizontalScrollingActions();
     if (onVerticalDragUpdate != null)
@@ -2287,17 +2420,17 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
   }
 
   @override
-  void performAction(SemanticAction action) {
+  void performAction(SemanticsAction action) {
     switch (action) {
-      case SemanticAction.tap:
+      case SemanticsAction.tap:
         if (onTap != null)
           onTap();
         break;
-      case SemanticAction.longPress:
+      case SemanticsAction.longPress:
         if (onLongPress != null)
           onLongPress();
         break;
-      case SemanticAction.scrollLeft:
+      case SemanticsAction.scrollLeft:
         if (onHorizontalDragUpdate != null) {
           final double primaryDelta = size.width * -scrollFactor;
           onHorizontalDragUpdate(new DragUpdateDetails(
@@ -2305,7 +2438,7 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
           ));
         }
         break;
-      case SemanticAction.scrollRight:
+      case SemanticsAction.scrollRight:
         if (onHorizontalDragUpdate != null) {
           final double primaryDelta = size.width * scrollFactor;
           onHorizontalDragUpdate(new DragUpdateDetails(
@@ -2313,7 +2446,7 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
           ));
         }
         break;
-      case SemanticAction.scrollUp:
+      case SemanticsAction.scrollUp:
         if (onVerticalDragUpdate != null) {
           final double primaryDelta = size.height * -scrollFactor;
           onVerticalDragUpdate(new DragUpdateDetails(
@@ -2321,7 +2454,7 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
           ));
         }
         break;
-      case SemanticAction.scrollDown:
+      case SemanticsAction.scrollDown:
         if (onVerticalDragUpdate != null) {
           final double primaryDelta = size.height * scrollFactor;
           onVerticalDragUpdate(new DragUpdateDetails(
@@ -2329,8 +2462,8 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
           ));
         }
         break;
-      case SemanticAction.increase:
-      case SemanticAction.decrease:
+      case SemanticsAction.increase:
+      case SemanticsAction.decrease:
         assert(false);
         break;
     }
@@ -2338,11 +2471,11 @@ class RenderSemanticsGestureHandler extends RenderProxyBox implements SemanticAc
 }
 
 /// Add annotations to the [SemanticsNode] for this subtree.
-class RenderSemanticAnnotations extends RenderProxyBox {
+class RenderSemanticsAnnotations extends RenderProxyBox {
   /// Creates a render object that attaches a semantic annotation.
   ///
   /// The [container] argument must not be null.
-  RenderSemanticAnnotations({
+  RenderSemanticsAnnotations({
     RenderBox child,
     bool container: false,
     bool checked,
@@ -2401,7 +2534,7 @@ class RenderSemanticAnnotations extends RenderProxyBox {
   bool get isSemanticBoundary => container;
 
   @override
-  SemanticAnnotator get semanticAnnotator => checked != null || label != null ? _annotate : null;
+  SemanticsAnnotator get semanticsAnnotator => checked != null || label != null ? _annotate : null;
 
   void _annotate(SemanticsNode node) {
     if (checked != null) {
@@ -2426,7 +2559,7 @@ class RenderMergeSemantics extends RenderProxyBox {
   RenderMergeSemantics({ RenderBox child }) : super(child);
 
   @override
-  SemanticAnnotator get semanticAnnotator => _annotate;
+  SemanticsAnnotator get semanticsAnnotator => _annotate;
 
   void _annotate(SemanticsNode node) {
     node.mergeAllDescendantsIntoThisNode = true;
