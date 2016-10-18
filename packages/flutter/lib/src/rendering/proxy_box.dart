@@ -855,8 +855,29 @@ class RenderBackdropFilter extends RenderProxyBox {
   }
 }
 
-/// A class that provides custom clips.
+/// An interface for providing custom clips.
+///
+/// This class is used by a number of clip widgets (e.g., [ClipRect] and
+/// [ClipPath]).
+///
+/// The [getClip] method is called whenever the custom clip needs to be updated.
+///
+/// The [shouldReclip] method is called when a new instance of the class
+/// is provided, to check if the new instance actually represents different
+/// information.
+///
+/// The most efficient way to update the clip provided by this class is to
+/// supply a reclip argument to the constructor of the [CustomClipper]. The
+/// custom object will listen to this animation and update the clip whenever the
+/// animation ticks, avoiding both the build and layout phases of the pipeline.
 abstract class CustomClipper<T> {
+  /// Creates a custom clipper.
+  ///
+  /// The clipper will update its clip whenever [reclip] notifies its listeners.
+  const CustomClipper({ Listenable reclip }) : _reclip = reclip;
+
+  final Listenable _reclip;
+
   /// Returns a description of the clip given that the render object being
   /// clipped is of the given size.
   T getClip(Size size);
@@ -871,9 +892,22 @@ abstract class CustomClipper<T> {
   /// with very small arcs in the corners), then this may be adequate.
   Rect getApproximateClipRect(Size size) => Point.origin & size;
 
-  /// Returns `true` if the new instance will result in a different clip
-  /// than the oldClipper instance.
-  bool shouldRepaint(@checked CustomClipper<T> oldClipper);
+  /// Called whenever a new instance of the custom clipper delegate class is
+  /// provided to the clip object, or any time that a new clip object is created
+  /// with a new instance of the custom painter delegate class (which amounts to
+  /// the same thing, because the latter is implemented in terms of the former).
+  ///
+  /// If the new instance represents different information than the old
+  /// instance, then the method should return `true`, otherwise it should return
+  /// `false`.
+  ///
+  /// If the method returns `false`, then the [getClip] call might be optimized
+  /// away.
+  ///
+  /// It's possible that the [getClip] method will get called even if
+  /// [shouldReclip] returns `false` or if the [getClip] method is never called
+  /// at all (e.g. if the box changes size).
+  bool shouldReclip(@checked CustomClipper<T> oldClipper);
 }
 
 abstract class _RenderCustomClip<T> extends RenderProxyBox {
@@ -893,11 +927,31 @@ abstract class _RenderCustomClip<T> extends RenderProxyBox {
     assert(newClipper != null || oldClipper != null);
     if (newClipper == null || oldClipper == null ||
         oldClipper.runtimeType != oldClipper.runtimeType ||
-        newClipper.shouldRepaint(oldClipper)) {
-      _clip = null;
-      markNeedsPaint();
-      markNeedsSemanticsUpdate(onlyChanges: true);
+        newClipper.shouldReclip(oldClipper)) {
+      _markNeedsClip();
     }
+    if (attached) {
+      oldClipper?._reclip?.removeListener(_markNeedsClip);
+      newClipper?._reclip?.addListener(_markNeedsClip);
+    }
+  }
+
+  @override
+  void attach(PipelineOwner owner) {
+    super.attach(owner);
+    _clipper?._reclip?.addListener(_markNeedsClip);
+ }
+
+  @override
+  void detach() {
+    _clipper?._reclip?.removeListener(_markNeedsClip);
+    super.detach();
+  }
+
+  void _markNeedsClip() {
+    _clip = null;
+    markNeedsPaint();
+    markNeedsSemanticsUpdate(onlyChanges: true);
   }
 
   T get _defaultClip;
@@ -961,25 +1015,30 @@ class RenderClipRect extends _RenderCustomClip<Rect> {
 
 /// Clips its child using a rounded rectangle.
 ///
-/// Creates a rounded rectangle from its layout dimensions and the given border
-/// radius and prevents its child from painting outside that rounded
-/// rectangle.
-class RenderClipRRect extends RenderProxyBox {
+/// By default, [RenderClipRRect] uses its own bounds as the base rectangle for
+/// the clip, but the size and location of the clip can be customized using a
+/// custom [clipper].
+class RenderClipRRect extends _RenderCustomClip<RRect> {
   /// Creates a rounded-rectangular clip.
   ///
   /// The [borderRadius] defaults to [BorderRadius.zero], i.e. a rectangle with
   /// right-angled corners.
+  ///
+  /// If [clipper] is non-null, then [borderRadius] is ignored.
   RenderClipRRect({
     RenderBox child,
-    BorderRadius borderRadius: BorderRadius.zero
-  }) : _borderRadius = borderRadius, super(child) {
-    assert(_borderRadius != null);
+    BorderRadius borderRadius: BorderRadius.zero,
+    CustomClipper<RRect> clipper,
+  }) : _borderRadius = borderRadius, super(child: child, clipper: clipper) {
+    assert(_borderRadius != null || clipper != null);
   }
 
-  /// The border radius of the rounded corners..
+  /// The border radius of the rounded corners.
   ///
   /// Values are clamped so that horizontal and vertical radii sums do not
   /// exceed width/height.
+  ///
+  /// This value is ignored if [clipper] is non-null.
   BorderRadius get borderRadius => _borderRadius;
   BorderRadius _borderRadius;
   set borderRadius (BorderRadius value) {
@@ -987,19 +1046,28 @@ class RenderClipRRect extends RenderProxyBox {
     if (_borderRadius == value)
       return;
     _borderRadius = value;
-    markNeedsPaint();
+    _markNeedsClip();
   }
 
-  // TODO(ianh): either convert this to the CustomClipper world, or
-  // TODO(ianh): implement describeApproximatePaintClip for this class
-  // TODO(ianh): implement hit testing for this class
+  @override
+  RRect get _defaultClip => _borderRadius.toRRect(Point.origin & size);
+
+  @override
+  bool hitTest(HitTestResult result, { Point position }) {
+    if (_clipper != null) {
+      _updateClip();
+      assert(_clip != null);
+      if (!_clip.contains(position))
+        return false;
+    }
+    return super.hitTest(result, position: position);
+  }
 
   @override
   void paint(PaintingContext context, Offset offset) {
     if (child != null) {
-      Rect rect = Point.origin & size;
-      RRect rrect = borderRadius.toRRect(rect);
-      context.pushClipRRect(needsCompositing, offset, rect, rrect, super.paint);
+      _updateClip();
+      context.pushClipRRect(needsCompositing, offset, _clip.outerRect, _clip, super.paint);
     }
   }
 }
@@ -1479,7 +1547,7 @@ class RenderFittedBox extends RenderProxyBox {
       final Rect destinationRect = _alignment.inscribe(sizes.destination, Point.origin & size);
       _hasVisualOverflow = sourceRect.width < childSize.width || sourceRect.height < childSize.width;
       _transform = new Matrix4.translationValues(destinationRect.left, destinationRect.top, 0.0)
-        ..scale(scaleX, scaleY)
+        ..scale(scaleX, scaleY, 1.0)
         ..translate(-sourceRect.left, -sourceRect.top);
     }
   }
@@ -1660,14 +1728,15 @@ abstract class CustomPainter {
   /// Called whenever a new instance of the custom painter delegate class is
   /// provided to the [RenderCustomPaint] object, or any time that a new
   /// [CustomPaint] object is created with a new instance of the custom painter
-  /// delegate class (which amounts to the same thing, since the latter is
+  /// delegate class (which amounts to the same thing, because the latter is
   /// implemented in terms of the former).
   ///
   /// If the new instance represents different information than the old
   /// instance, then the method should return `true`, otherwise it should return
   /// `false`.
   ///
-  /// If the method returns `false`, then the paint call might be optimized away.
+  /// If the method returns `false`, then the [paint] call might be optimized
+  /// away.
   ///
   /// It's possible that the [paint] method will get called even if
   /// [shouldRepaint] returns `false` (e.g. if an ancestor or descendant needed to

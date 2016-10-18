@@ -72,6 +72,8 @@ abstract class MultiDragPointerState {
   }
 
   /// Resolve this pointer's entry in the [GestureArenaManager] with the given disposition.
+  @protected
+  @mustCallSuper
   void resolve(GestureDisposition disposition) {
     _arenaEntry.resolve(disposition);
   }
@@ -81,29 +83,33 @@ abstract class MultiDragPointerState {
     _velocityTracker.addPosition(event.timeStamp, event.position);
     if (_client != null) {
       assert(pendingDelta == null);
+      // Call client last to avoid reentrancy.
       _client.update(new DragUpdateDetails(delta: event.delta));
     } else {
       assert(pendingDelta != null);
       _pendingDelta += event.delta;
       checkForResolutionAfterMove();
     }
-    return null;
   }
 
   /// Override this to call resolve() if the drag should be accepted or rejected.
   /// This is called when a pointer movement is received, but only if the gesture
   /// has not yet been resolved.
+  @protected
   void checkForResolutionAfterMove() { }
 
   /// Called when the gesture was accepted.
   ///
   /// Either immediately or at some future point before the gesture is disposed,
   /// call starter(), passing it initialPosition, to start the drag.
+  @protected
   void accepted(GestureMultiDragStartCallback starter);
 
   /// Called when the gesture was rejected.
   ///
   /// [dispose()] will be called immediately following this.
+  @protected
+  @mustCallSuper
   void rejected() {
     assert(_arenaEntry != null);
     assert(_client == null);
@@ -118,40 +124,47 @@ abstract class MultiDragPointerState {
     assert(client != null);
     assert(pendingDelta != null);
     _client = client;
-    _client.update(new DragUpdateDetails(delta: pendingDelta));
+    final DragUpdateDetails details = new DragUpdateDetails(delta: pendingDelta);
     _pendingDelta = null;
+    // Call client last to avoid reentrancy.
+    _client.update(details);
   }
 
   void _up() {
     assert(_arenaEntry != null);
     if (_client != null) {
       assert(pendingDelta == null);
-      _client.end(new DragEndDetails(velocity: _velocityTracker.getVelocity() ?? Velocity.zero));
+      final DragEndDetails details = new DragEndDetails(velocity: _velocityTracker.getVelocity() ?? Velocity.zero);
+      final Drag client = _client;
       _client = null;
+      // Call client last to avoid reentrancy.
+      client.end(details);
     } else {
       assert(pendingDelta != null);
       _pendingDelta = null;
     }
-    _arenaEntry = null;
   }
 
   void _cancel() {
     assert(_arenaEntry != null);
     if (_client != null) {
       assert(pendingDelta == null);
-      _client.cancel();
+      final Drag client = _client;
       _client = null;
+      // Call client last to avoid reentrancy.
+      client.cancel();
     } else {
       assert(pendingDelta != null);
       _pendingDelta = null;
     }
-    _arenaEntry = null;
   }
 
   /// Releases any resources used by the object.
+  @protected
   @mustCallSuper
   void dispose() {
     _arenaEntry?.resolve(GestureDisposition.rejected);
+    _arenaEntry = null;
     assert(() { _pendingDelta = null; return true; });
   }
 }
@@ -195,6 +208,7 @@ abstract class MultiDragGestureRecognizer<T extends MultiDragPointerState> exten
 
   /// Subclasses should override this method to create per-pointer state
   /// objects to track the pointer associated with the given event.
+  @protected
   T createNewPointerState(PointerDownEvent event);
 
   void _handleEvent(PointerEvent event) {
@@ -206,16 +220,19 @@ abstract class MultiDragGestureRecognizer<T extends MultiDragPointerState> exten
     T state = _pointers[event.pointer];
     if (event is PointerMoveEvent) {
       state._move(event);
+      // We might be disposed here.
     } else if (event is PointerUpEvent) {
       assert(event.delta == Offset.zero);
       state._up();
+      // We might be disposed here.
       _removeState(event.pointer);
     } else if (event is PointerCancelEvent) {
       assert(event.delta == Offset.zero);
       state._cancel();
+      // We might be disposed here.
       _removeState(event.pointer);
     } else if (event is! PointerDownEvent) {
-      // we get the PointerDownEvent that resulted in our addPointer gettig called since we
+      // we get the PointerDownEvent that resulted in our addPointer getting called since we
       // add ourselves to the pointer router then (before the pointer router has heard of
       // the event).
       assert(false);
@@ -259,7 +276,11 @@ abstract class MultiDragGestureRecognizer<T extends MultiDragPointerState> exten
   }
 
   void _removeState(int pointer) {
-    assert(_pointers != null);
+    if (_pointers == null) {
+      // We've already been disposed. It's harmless to skip removing the state
+      // for the given pointer because dispose() has already removed it.
+      return;
+    }
     assert(_pointers.containsKey(pointer));
     GestureBinding.instance.pointerRouter.removeRoute(pointer, _handleEvent);
     _pointers.remove(pointer).dispose();
@@ -408,6 +429,11 @@ class _DelayedPointerState extends MultiDragPointerState {
     assert(_starter == null);
   }
 
+  void _ensureTimerStopped() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
   @override
   void accepted(GestureMultiDragStartCallback starter) {
     assert(_starter == null);
@@ -419,16 +445,25 @@ class _DelayedPointerState extends MultiDragPointerState {
 
   @override
   void checkForResolutionAfterMove() {
-    assert(_timer != null);
+    if (_timer == null) {
+      // If we've been accepted by the gesture arena but the pointer moves too
+      // much before the timer fires, we end up a state where the timer is
+      // stopped but we keep getting calls to this function because we never
+      // actually started the drag. In this case, _starter will be non-null
+      // because we're essentially waiting forever to start the drag.
+      assert(_starter != null);
+      return;
+    }
     assert(pendingDelta != null);
-    if (pendingDelta.distance > kTouchSlop)
+    if (pendingDelta.distance > kTouchSlop) {
       resolve(GestureDisposition.rejected);
+      _ensureTimerStopped();
+    }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
-    _timer = null;
+    _ensureTimerStopped();
     super.dispose();
   }
 }

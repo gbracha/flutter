@@ -17,8 +17,6 @@ import '../globals.dart';
 import '../services.dart';
 import 'xcodeproj.dart';
 
-String get homeDirectory => path.absolute(Platform.environment['HOME']);
-
 const int kXcodeRequiredVersionMajor = 7;
 const int kXcodeRequiredVersionMinor = 0;
 
@@ -102,7 +100,7 @@ bool _xcodeVersionCheckValid(int major, int minor) {
 }
 
 Future<XcodeBuildResult> buildXcodeProject({
-  IOSApp app,
+  BuildableIOSApp app,
   BuildMode mode,
   String target: flx.defaultMainPath,
   bool buildForDevice,

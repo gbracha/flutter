@@ -10,6 +10,7 @@ import 'dart:math' as math;
 import 'package:path/path.dart' as path;
 
 import '../application_package.dart';
+import '../base/common.dart';
 import '../base/context.dart';
 import '../base/process.dart';
 import '../build_info.dart';
@@ -318,7 +319,7 @@ class IOSSimulator extends Device {
   String get xcrunPath => path.join('/usr', 'bin', 'xcrun');
 
   String _getSimulatorPath() {
-    return path.join(homeDirectory, 'Library', 'Developer', 'CoreSimulator', 'Devices', id);
+    return path.join(homeDirPath, 'Library', 'Developer', 'CoreSimulator', 'Devices', id);
   }
 
   String _getSimulatorAppHomeDirectory(ApplicationPackage app) {
@@ -415,10 +416,12 @@ class IOSSimulator extends Device {
     Map<String, dynamic> platformArgs,
     bool prebuiltApplication: false
   }) async {
-    printTrace('Building ${app.name} for $id.');
+    if (!prebuiltApplication) {
+      printTrace('Building ${app.name} for $id.');
 
-    if (!(await _setupUpdatedApplicationBundle(app)))
-      return new LaunchResult.failed();
+      if (!(await _setupUpdatedApplicationBundle(app)))
+        return new LaunchResult.failed();
+    }
 
     ProtocolDiscovery observatoryDiscovery;
 
@@ -426,11 +429,15 @@ class IOSSimulator extends Device {
       observatoryDiscovery = new ProtocolDiscovery(logReader, ProtocolDiscovery.kObservatoryService);
 
     // Prepare launch arguments.
-    List<String> args = <String>[
-      "--flx=${path.absolute(path.join(getBuildDirectory(), 'app.flx'))}",
-      "--dart-main=${path.absolute(mainPath)}",
-      "--packages=${path.absolute('.packages')}",
-    ];
+    List<String> args = <String>[];
+
+    if (!prebuiltApplication) {
+      args.addAll(<String>[
+        "--flx=${path.absolute(path.join(getBuildDirectory(), 'app.flx'))}",
+        "--dart-main=${path.absolute(mainPath)}",
+        "--packages=${path.absolute('.packages')}",
+      ]);
+    }
 
     if (debuggingOptions.debuggingEnabled) {
       if (debuggingOptions.buildMode == BuildMode.debug)
@@ -544,7 +551,7 @@ class IOSSimulator extends Device {
   }
 
   String get logFilePath {
-    return path.join(homeDirectory, 'Library', 'Logs', 'CoreSimulator', id, 'system.log');
+    return path.join(homeDirPath, 'Library', 'Logs', 'CoreSimulator', id, 'system.log');
   }
 
   @override
@@ -587,7 +594,6 @@ class IOSSimulator extends Device {
 
   @override
   Future<bool> takeScreenshot(File outputFile) async {
-    String homeDirPath = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'];
     Directory desktopDir = new Directory(path.join(homeDirPath, 'Desktop'));
 
     // 'Simulator Screen Shot Mar 25, 2016, 2.59.43 PM.png'
@@ -692,6 +698,17 @@ class _IOSSimulatorLogReader extends DeviceLogReader {
           category == 'nanoregistrylaunchd' || category == 'mstreamd' ||
           category == 'syncdefaultsd' || category == 'companionappd' ||
           category == 'searchd')
+        return null;
+
+      if (category == 'CoreSimulatorBridge'
+          && content.startsWith('Pasteboard change listener callback port'))
+        return null;
+
+      if (category == 'routined'
+          && content.startsWith('CoreLocation: Error occurred while trying to retrieve motion state update'))
+        return null;
+
+      if (category == 'syslogd' && content == 'ASL Sender Statistics')
         return null;
 
       // assertiond: assertion failed: 15E65 13E230: assertiond + 15801 [3C808658-78EC-3950-A264-79A64E0E463B]: 0x1

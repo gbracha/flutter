@@ -47,10 +47,10 @@ class UpgradeCommand extends FlutterCommand {
       mapFunction: (String line) => matchesGitLine(line) ? null : line
     );
 
-    await buildUnlinkedForPackages(Cache.flutterRoot);
-
     if (code != 0)
       return code;
+
+    await buildUnlinkedForPackages(Cache.flutterRoot);
 
     // Check for and download any engine and pkg/ updates.
     // We run the 'flutter' shell script re-entrantly here
@@ -78,6 +78,11 @@ class UpgradeCommand extends FlutterCommand {
       if (code != 0)
         return code;
     }
+
+    // Run a doctor check in case system requirements have changed.
+    printStatus('');
+    printStatus('Running flutter doctor...');
+    await doctor.diagnose();
 
     return 0;
   }
