@@ -171,7 +171,7 @@ class HotRunner extends ResidentRunner {
     }
 
     _package = getApplicationPackageForPlatform(device.platform);
-
+    
     if (_package == null) {
       String message = 'No application found for ${device.platform}.';
       String hint = getMissingPackageHintForPlatform(device.platform);
@@ -349,6 +349,7 @@ class HotRunner extends ResidentRunner {
   Future<bool> _updateDevFS({ DevFSProgressReporter progressReporter }) async {
     Status devFSStatus = logger.startProgress('Syncing files to device...');
     final bool rebuildBundle = bundle.needsBuild();
+
     if (rebuildBundle) {
       printTrace('Updating assets');
       await bundle.build();

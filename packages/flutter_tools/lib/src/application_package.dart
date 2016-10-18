@@ -107,7 +107,6 @@ class AndroidApk extends ApplicationPackage {
         break;
       }
     }
-
     if (packageId == null || launchActivity == null)
       return null;
 
