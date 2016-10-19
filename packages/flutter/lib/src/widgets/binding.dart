@@ -5,6 +5,7 @@
 import 'dart:developer' as developer;
 import 'dart:ui' as ui show window;
 import 'dart:ui' show AppLifecycleState, Locale;
+import 'dart:async' show Future;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
@@ -386,15 +387,15 @@ void debugDumpApp() {
   }
 }
 
-/* Allow Observatory to access
+/* Allow the service protocol to access
  * the Flutter element tree.
  *  The actual Flutter objects
  *  collected  are serialized into maps
- *  to whatever depth we find useful.  Observatory has expectations wrt to
+ *  to whatever depth we find useful.  The service protocol has expectations wrt to
  *  this - it expects a type field for example.
  */
 
-/* Future<Map<String, dynamic>>*/ debugReturnElementTree(
+Future<Map<String, dynamic>> debugReturnElementTree(
     Map<String, String> parameters) async {
   List<Map<String, dynamic>> stack = [
     {'children': []}
