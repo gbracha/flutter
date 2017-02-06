@@ -4,21 +4,53 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'package:file/file.dart' as f;
 import 'dart:io';
 import 'package:json_rpc_2/json_rpc_2.dart' as rpc;
+import 'package:meta/meta.dart';
+import 'package:path/path.dart' as p;
 import 'package:vm_service_client/vm_service_client.dart';
 import 'package:web_socket_channel/io.dart';
 
+import 'common.dart';
 import 'error.dart';
 import 'find.dart';
+import 'frame_sync.dart';
 import 'gesture.dart';
 import 'health.dart';
 import 'input.dart';
 import 'message.dart';
+import 'render_tree.dart';
 import 'timeline.dart';
 
+/// Timeline stream identifier.
 enum TimelineStream {
-  all, api, compiler, dart, debugger, embedder, gc, isolate, vm
+  /// A meta-identifier that instructs the Dart VM to record all streams.
+  all,
+
+  /// Marks events related to calls made via Dart's C API.
+  api,
+
+  /// Marks events from the Dart VM's JIT compiler.
+  compiler,
+
+  /// Marks events emitted using the `dart:developer` API.
+  dart,
+
+  /// Marks events from the Dart VM debugger.
+  debugger,
+
+  /// Marks events emitted using the `dart_tools_api.h` C API.
+  embedder,
+
+  /// Marks events from the garbage collector.
+  gc,
+
+  /// Marks events related to message passing between Dart isolates.
+  isolate,
+
+  /// Marks internal VM events.
+  vm,
 }
 
 const List<TimelineStream> _defaultStreams = const <TimelineStream>[TimelineStream.all];
@@ -62,20 +94,48 @@ typedef dynamic EvaluatorFunction();
 
 /// Drives a Flutter Application running in another process.
 class FlutterDriver {
-  FlutterDriver.connectedTo(this._serviceClient, this._peer, this._appIsolate);
+  /// Creates a driver that uses a connection provided by the given
+  /// [_serviceClient], [_peer] and [_appIsolate].
+  @visibleForTesting
+  FlutterDriver.connectedTo(this._serviceClient, this._peer, this._appIsolate,
+      { bool printCommunication: false, bool logCommunicationToFile: true })
+      : _printCommunication = printCommunication,
+        _logCommunicationToFile = logCommunicationToFile,
+        _driverId = _nextDriverId++;
 
   static const String _kFlutterExtensionMethod = 'ext.flutter.driver';
   static const String _kSetVMTimelineFlagsMethod = '_setVMTimelineFlags';
   static const String _kGetVMTimelineMethod = '_getVMTimeline';
-  static const Duration _kDefaultTimeout = const Duration(seconds: 5);
+  static const Duration _kRpcGraceTime = const Duration(seconds: 2);
+
+  static int _nextDriverId = 0;
 
   /// Connects to a Flutter application.
   ///
   /// Resumes the application if it is currently paused (e.g. at a breakpoint).
   ///
-  /// [dartVmServiceUrl] is the URL to Dart observatory (a.k.a. VM service). By
-  /// default it connects to `http://localhost:8183`.
-  static Future<FlutterDriver> connect({String dartVmServiceUrl: 'http://localhost:8183'}) async {
+  /// [dartVmServiceUrl] is the URL to Dart observatory (a.k.a. VM service). If
+  /// not specified, the URL specified by the `VM_SERVICE_URL` environment
+  /// variable is used. One or the other must be specified.
+  ///
+  /// [printCommunication] determines whether the command communication between
+  /// the test and the app should be printed to stdout.
+  ///
+  /// [logCommunicationToFile] determines whether the command communication
+  /// between the test and the app should be logged to `flutter_driver_commands.log`.
+  static Future<FlutterDriver> connect({ String dartVmServiceUrl,
+                                         bool printCommunication: false,
+                                         bool logCommunicationToFile: true }) async {
+    dartVmServiceUrl ??= Platform.environment['VM_SERVICE_URL'];
+
+    if (dartVmServiceUrl == null) {
+      throw new DriverError(
+        'Could not determine URL to connect to application.\n'
+        'Either the VM_SERVICE_URL environment variable should be set, or an explicit\n'
+        'URL should be provided to the FlutterDriver.connect() method.'
+      );
+    }
+
     // Connect to Dart VM servcies
     _log.info('Connecting to Flutter application at $dartVmServiceUrl');
     VMServiceClientConnection connection = await vmServiceConnectFunction(dartVmServiceUrl);
@@ -101,7 +161,11 @@ class FlutterDriver {
       isolate = await vm.isolates.first.loadRunnable();
     }
 
-    FlutterDriver driver = new FlutterDriver.connectedTo(client, connection.peer, isolate);
+    FlutterDriver driver = new FlutterDriver.connectedTo(
+        client, connection.peer, isolate,
+        printCommunication: printCommunication,
+        logCommunicationToFile: logCommunicationToFile
+    );
 
     // Attempts to resume the isolate, but does not crash if it fails because
     // the isolate is already resumed. There could be a race with other tools,
@@ -139,7 +203,7 @@ class FlutterDriver {
       // option, then the VM service extension is not registered yet. Wait for
       // it to be registered.
       Future<dynamic> whenResumed = resumeLeniently();
-      Future<dynamic> whenServiceExtensionReady = Future.any/*<dynamic>*/(<Future<dynamic>>[
+      Future<dynamic> whenServiceExtensionReady = Future.any<dynamic>(<Future<dynamic>>[
         waitForServiceExtension(),
         // We will never receive the extension event if the user does not
         // register it. If that happens time out.
@@ -184,18 +248,34 @@ class FlutterDriver {
     return driver;
   }
 
+  /// The unique ID of this driver instance.
+  final int _driverId;
   /// Client connected to the Dart VM running the Flutter application
   final VMServiceClient _serviceClient;
   /// JSON-RPC client useful for sending raw JSON requests.
   final rpc.Peer _peer;
   /// The main isolate hosting the Flutter application
   final VMIsolateRef _appIsolate;
+  /// Whether to print communication between host and app to `stdout`.
+  final bool _printCommunication;
+  /// Whether to log communication between host and app to `flutter_driver_commands.log`.
+  final bool _logCommunicationToFile;
 
   Future<Map<String, dynamic>> _sendCommand(Command command) async {
-    Map<String, String> parameters = <String, String>{'command': command.kind}
-      ..addAll(command.serialize());
+    Map<String, dynamic> response;
     try {
-      return await _appIsolate.invokeExtension(_kFlutterExtensionMethod, parameters);
+      Map<String, String> serialized = command.serialize();
+      _logCommunication('>>> $serialized');
+      response = await _appIsolate
+          .invokeExtension(_kFlutterExtensionMethod, serialized)
+          .timeout(command.timeout + _kRpcGraceTime);
+      _logCommunication('<<< $response');
+    } on TimeoutException catch (error, stackTrace) {
+      throw new DriverError(
+        'Failed to fulfill ${command.runtimeType}: Flutter application not responding',
+        error,
+        stackTrace
+      );
     } catch (error, stackTrace) {
       throw new DriverError(
         'Failed to fulfill ${command.runtimeType} due to remote error',
@@ -203,11 +283,29 @@ class FlutterDriver {
         stackTrace
       );
     }
+    if (response['isError'])
+      throw new DriverError('Error in Flutter application: ${response['response']}');
+    return response['response'];
+  }
+
+  void _logCommunication(String message)  {
+    if (_printCommunication)
+      _log.info(message);
+    if (_logCommunicationToFile) {
+      f.File file = fs.file(p.join(testOutputsDirectory, 'flutter_driver_commands_$_driverId.log'));
+      file.createSync(recursive: true); // no-op if file exists
+      file.writeAsStringSync('${new DateTime.now()} $message\n', mode: f.FileMode.APPEND, flush: true);
+    }
   }
 
   /// Checks the status of the Flutter Driver extension.
   Future<Health> checkHealth() async {
     return Health.fromJson(await _sendCommand(new GetHealth()));
+  }
+
+  /// Returns a dump of the render tree.
+  Future<RenderTree> getRenderTree() async {
+    return RenderTree.fromJson(await _sendCommand(new GetRenderTree()));
   }
 
   /// Taps at the center of the widget located by [finder].
@@ -235,7 +333,7 @@ class FlutterDriver {
   }
 
   /// Waits until [finder] locates the target.
-  Future<Null> waitFor(SerializableFinder finder, {Duration timeout: _kDefaultTimeout}) async {
+  Future<Null> waitFor(SerializableFinder finder, {Duration timeout}) async {
     await _sendCommand(new WaitFor(finder, timeout: timeout));
     return null;
   }
@@ -249,7 +347,7 @@ class FlutterDriver {
   ///
   /// [dx] and [dy] specify the total offset for the entire scrolling action.
   ///
-  /// [duration] specifies the lenght of the action.
+  /// [duration] specifies the length of the action.
   ///
   /// The move events are generated at a given [frequency] in Hz (or events per
   /// second). It defaults to 60Hz.
@@ -272,6 +370,30 @@ class FlutterDriver {
   Future<List<int>> screenshot() async {
     Map<String, dynamic> result = await _peer.sendRequest('_flutter.screenshot');
     return BASE64.decode(result['screenshot']);
+  }
+
+  /// Returns the Flags set in the Dart VM as JSON.
+  ///
+  /// See the complete documentation for `getFlagList` Dart VM service method
+  /// [here][getFlagList].
+  ///
+  /// Example return value:
+  ///
+  ///     [
+  ///       {
+  ///         "name": "timeline_recorder",
+  ///         "comment": "Select the timeline recorder used. Valid values: ring, endless, startup, and systrace.",
+  ///         "modified": false,
+  ///         "_flagType": "String",
+  ///         "valueAsString": "ring"
+  ///       },
+  ///       ...
+  ///     ]
+  ///
+  /// [getFlagList]: https://github.com/dart-lang/sdk/blob/master/runtime/vm/service/service.md#getflaglist
+  Future<List<Map<String, dynamic>>> getVmFlags() async {
+    Map<String, dynamic> result = await _peer.sendRequest('getFlagList');
+    return result['flags'];
   }
 
   /// Starts recording performance traces.
@@ -312,10 +434,40 @@ class FlutterDriver {
   ///
   /// This is merely a convenience wrapper on top of [startTracing] and
   /// [stopTracingAndDownloadTimeline].
+  ///
+  /// [streams] limits the recorded timeline event streams to only the ones
+  /// listed. By default, all streams are recorded.
   Future<Timeline> traceAction(Future<dynamic> action(), { List<TimelineStream> streams: _defaultStreams }) async {
     await startTracing(streams: streams);
     await action();
     return stopTracingAndDownloadTimeline();
+  }
+
+  /// [action] will be executed with the frame sync mechanism disabled.
+  ///
+  /// By default, Flutter Driver waits until there is no pending frame scheduled
+  /// in the app under test before executing an action. This mechanism is called
+  /// "frame sync". It greatly reduces flakiness because Flutter Driver will not
+  /// execute an action while the app under test is undergoing a transition.
+  ///
+  /// Having said that, sometimes it is necessary to disable the frame sync
+  /// mechanism (e.g. if there is an ongoing animation in the app, it will
+  /// never reach a state where there are no pending frames scheduled and the
+  /// action will time out). For these cases, the sync mechanism can be disabled
+  /// by wrapping the actions to be performed by this [runUnsynchronized] method.
+  ///
+  /// With frame sync disabled, its the responsibility of the test author to
+  /// ensure that no action is performed while the app is undergoing a
+  /// transition to avoid flakiness.
+  Future<T> runUnsynchronized<T>(Future<T> action()) async {
+    await _sendCommand(new SetFrameSync(false));
+    T result;
+    try {
+      result = await action();
+    } finally {
+      await _sendCommand(new SetFrameSync(true));
+    }
+    return result;
   }
 
   /// Closes the underlying connection to the VM service.
@@ -330,6 +482,7 @@ class FlutterDriver {
 }
 
 /// Encapsulates connection information to an instance of a Flutter application.
+@visibleForTesting
 class VMServiceClientConnection {
   /// Use this for structured access to the VM service's public APIs.
   final VMServiceClient client;
@@ -340,6 +493,7 @@ class VMServiceClientConnection {
   /// caution.
   final rpc.Peer peer;
 
+  /// Creates an instance of this class given a [client] and a [peer].
   VMServiceClientConnection(this.client, this.peer);
 }
 

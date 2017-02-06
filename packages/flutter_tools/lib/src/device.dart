@@ -3,19 +3,21 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 import 'dart:math' as math;
 
 import 'android/android_device.dart';
 import 'application_package.dart';
 import 'base/common.dart';
+import 'base/context.dart';
+import 'base/file_system.dart';
 import 'base/os.dart';
 import 'base/utils.dart';
 import 'build_info.dart';
 import 'globals.dart';
-import 'vmservice.dart';
 import 'ios/devices.dart';
 import 'ios/simulators.dart';
+
+DeviceManager get deviceManager => context[DeviceManager];
 
 /// A class to get all available devices.
 class DeviceManager {
@@ -161,13 +163,35 @@ abstract class Device {
   // supported by Flutter, and, if not, why.
   String supportMessage() => isSupported() ? "Supported" : "Unsupported";
 
+  // TODO(tvolkert): Rename to `targetPlatform`, and remove the "as p"
+  // aliases on the `platform.dart` imports where applicable.
   TargetPlatform get platform;
 
-  /// Get the log reader for this device.
-  DeviceLogReader get logReader;
+  String get sdkNameAndVersion;
+
+  /// Get a log reader for this device.
+  /// If [app] is specified, this will return a log reader specific to that
+  /// application. Otherwise, a global log reader will be returned.
+  DeviceLogReader getLogReader({ApplicationPackage app});
 
   /// Get the port forwarder for this device.
   DevicePortForwarder get portForwarder;
+
+  Future<int> forwardPort(int devicePort, {int hostPort}) async {
+    try {
+      hostPort = await portForwarder
+          .forward(devicePort, hostPort: hostPort)
+          .timeout(const Duration(seconds: 60), onTimeout: () {
+            throw new ToolExit(
+                'Timeout while atempting to foward device port $devicePort');
+          });
+      printTrace('Forwarded host port $hostPort to device port $devicePort');
+      return hostPort;
+    } catch (e) {
+      throw new ToolExit(
+          'Unable to forward host port $hostPort to device port $devicePort: $e');
+    }
+  }
 
   /// Clear the device's logs.
   void clearLogs();
@@ -183,41 +207,19 @@ abstract class Device {
     String route,
     DebuggingOptions debuggingOptions,
     Map<String, dynamic> platformArgs,
-    bool prebuiltApplication: false
+    bool prebuiltApplication: false,
+    bool applicationNeedsRebuild: false
   });
 
   /// Does this device implement support for hot reloading / restarting?
-  bool get supportsHotMode => false;
-
-  /// Run from a file. Necessary for hot mode.
-  Future<bool> runFromFile(ApplicationPackage package,
-                           String scriptUri,
-                           String packagesUri) {
-    throw 'runFromFile unsupported';
-  }
-
-  bool get supportsRestart => false;
-
-  bool get restartSendsFrameworkInitEvent => true;
-
-  /// Restart the given app; the application will already have been launched with
-  /// [startApp].
-  Future<bool> restartApp(
-    ApplicationPackage package,
-    LaunchResult result, {
-    String mainPath,
-    VMService observatory,
-    bool prebuiltApplication: false
-  }) async {
-    throw 'unsupported';
-  }
+  bool get supportsHotMode => true;
 
   /// Stop an app package on the current device.
   Future<bool> stopApp(ApplicationPackage app);
 
   bool get supportsScreenshot => false;
 
-  Future<bool> takeScreenshot(File outputFile) => new Future<bool>.error('unimplemented');
+  Future<Null> takeScreenshot(File outputFile) => new Future<Null>.error('unimplemented');
 
   /// Find the apps that are currently running on this device.
   Future<List<DiscoveredApp>> discoverApps() =>
@@ -239,24 +241,36 @@ abstract class Device {
   String toString() => name;
 
   static Iterable<String> descriptions(List<Device> devices) {
-    int nameWidth = 0;
-    int idWidth = 0;
+    if (devices.isEmpty)
+      return <String>[];
 
+    // Extract device information
+    List<List<String>> table = <List<String>>[];
     for (Device device in devices) {
-      nameWidth = math.max(nameWidth, device.name.length);
-      idWidth = math.max(idWidth, device.id.length);
-    }
-
-    return devices.map((Device device) {
       String supportIndicator = device.isSupported() ? '' : ' (unsupported)';
       if (device.isLocalEmulator) {
         String type = device.platform == TargetPlatform.ios ? 'simulator' : 'emulator';
         supportIndicator += ' ($type)';
       }
-      return '${device.name.padRight(nameWidth)} • '
-             '${device.id.padRight(idWidth)} • '
-             '${getNameForTargetPlatform(device.platform)}$supportIndicator';
-    });
+      table.add(<String>[
+        device.name,
+        device.id,
+        '${getNameForTargetPlatform(device.platform)}',
+        '${device.sdkNameAndVersion}$supportIndicator',
+      ]);
+    }
+
+    // Calculate column widths
+    List<int> indices = new List<int>.generate(table[0].length - 1, (int i) => i);
+    List<int> widths = indices.map((int i) => 0).toList();
+    for (List<String> row in table) {
+      widths = indices.map((int i) => math.max(widths[i], row[i].length)).toList();
+    }
+
+    // Join columns into lines of text
+    return table.map((List<String> row) =>
+        indices.map((int i) => row[i].padRight(widths[i])).join(' • ') +
+        ' • ${row.last}');
   }
 
   static void printDevices(List<Device> devices) {
@@ -299,27 +313,29 @@ class DebuggingOptions {
   /// Return the user specified diagnostic port. If that isn't available,
   /// return [kDefaultDiagnosticPort], or a port close to that one.
   Future<int> findBestDiagnosticPort() {
+    if (hasDiagnosticPort)
+      return new Future<int>.value(diagnosticPort);
     return findPreferredPort(diagnosticPort ?? kDefaultDiagnosticPort);
   }
 }
 
 class LaunchResult {
-  LaunchResult.succeeded({ this.observatoryPort, this.diagnosticPort }) : started = true;
-  LaunchResult.failed() : started = false, observatoryPort = null, diagnosticPort = null;
+  LaunchResult.succeeded({ this.observatoryUri, this.diagnosticUri }) : started = true;
+  LaunchResult.failed() : started = false, observatoryUri = null, diagnosticUri = null;
 
-  bool get hasObservatory => observatoryPort != null;
+  bool get hasObservatory => observatoryUri != null;
 
   final bool started;
-  final int observatoryPort;
-  final int diagnosticPort;
+  final Uri observatoryUri;
+  final Uri diagnosticUri;
 
   @override
   String toString() {
     StringBuffer buf = new StringBuffer('started=$started');
-    if (observatoryPort != null)
-      buf.write(', observatory=$observatoryPort');
-    if (diagnosticPort != null)
-      buf.write(', diagnostic=$diagnosticPort');
+    if (observatoryUri != null)
+      buf.write(', observatory=$observatoryUri');
+    if (diagnosticUri != null)
+      buf.write(', diagnostic=$diagnosticUri');
     return buf.toString();
   }
 }
@@ -364,7 +380,8 @@ abstract class DeviceLogReader {
 
 /// Describes an app running on the device.
 class DiscoveredApp {
-  DiscoveredApp(this.id, this.observatoryPort);
+  DiscoveredApp(this.id, this.observatoryPort, this.diagnosticPort);
   final String id;
   final int observatoryPort;
+  final int diagnosticPort;
 }

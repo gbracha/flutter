@@ -8,7 +8,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 import 'package:test/test.dart' as test_package;
 
 import 'all_elements.dart';
@@ -163,6 +162,10 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   /// microtasks, by calling [pump] with the same `duration` (if any). The
   /// supplied [EnginePhase] is the final phase reached during the pump pass; if
   /// not supplied, the whole pass is executed.
+  ///
+  /// Subsequent calls to this is different from [pump] in that it forces a full
+  /// rebuild of the tree, even if [widget] is the same as the previous call.
+  /// [pump] will only rebuild the widgets that have changed.
   Future<Null> pumpWidget(Widget widget, [
     Duration duration,
     EnginePhase phase = EnginePhase.sendSemanticsTree
@@ -209,10 +212,10 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
   ///
   /// Alternatively, one can check that the return value from this function
   /// matches the expected number of pumps.
-  Future<int> pumpUntilNoTransientCallbacks([
-    @required Duration duration,
-    EnginePhase phase = EnginePhase.sendSemanticsTree
-  ]) {
+  Future<int> pumpUntilNoTransientCallbacks(
+    Duration duration, [
+      EnginePhase phase = EnginePhase.sendSemanticsTree
+    ]) {
     assert(duration != null);
     assert(duration > Duration.ZERO);
     int count = 0;
@@ -221,7 +224,7 @@ class WidgetTester extends WidgetController implements HitTestDispatcher, Ticker
         await binding.pump(duration, phase);
         count += 1;
       }
-    }).then/*<int>*/((Null _) => count);
+    }).then<int>((Null _) => count);
   }
 
   @override

@@ -3,9 +3,10 @@
 // found in the LICENSE file.
 
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import 'app_bar.dart';
 import 'debug.dart';
@@ -27,11 +28,11 @@ import 'theme.dart';
 /// version, icon, and copyright in the appropriate fields.
 ///
 /// The about box will include a button that shows licenses for software used by
-/// the application.
+/// the application. The licenses shown are those returned by the
+/// [LicenseRegistry] API, which can be used to add more licenses to the list.
 ///
 /// If your application does not have a [Drawer], you should provide an
 /// affordance to call [showAboutDialog] or (at least) [showLicensePage].
-// TODO(ianh): Mention the API for registering more licenses once it exists.
 class AboutDrawerItem extends StatelessWidget {
   /// Creates a drawer item for showing an about box.
   ///
@@ -69,9 +70,7 @@ class AboutDrawerItem extends StatelessWidget {
   /// [child]) and as the caption of the [AboutDialog] that is shown.
   ///
   /// Defaults to the value of [Title.title], if a [Title] widget can be found.
-  /// Otherwise, defaults to "this Flutter application".
-  // TODO(ianh): once https://github.com/flutter/flutter/issues/3648 is fixed:
-  // /// Otherwise, defaults to [Platform.resolvedExecutable].
+  /// Otherwise, defaults to [Platform.resolvedExecutable].
   final String applicationName;
 
   /// The version of this build of the application.
@@ -137,6 +136,9 @@ class AboutDrawerItem extends StatelessWidget {
 ///
 /// If you do not need an about box in your application, you should at least
 /// provide an affordance to call [showLicensePage].
+///
+/// The licenses shown on the [LicensePage] are those returned by the
+/// [LicenseRegistry] API, which can be used to add more licenses to the list.
 void showAboutDialog({
   @required BuildContext context,
   String applicationName,
@@ -145,7 +147,7 @@ void showAboutDialog({
   String applicationLegalese,
   List<Widget> children
 }) {
-  showDialog/*<Null>*/(
+  showDialog<Null>(
     context: context,
     child: new AboutDialog(
       applicationName: applicationName,
@@ -167,7 +169,9 @@ void showAboutDialog({
 ///
 /// The [AboutDialog] shown by [showAboutDialog] includes a button that calls
 /// [showLicensePage].
-// TODO(ianh): Mention the API for registering more licenses once it exists.
+///
+/// The licenses shown on the [LicensePage] are those returned by the
+/// [LicenseRegistry] API, which can be used to add more licenses to the list.
 void showLicensePage({
   @required BuildContext context,
   String applicationName,
@@ -191,6 +195,15 @@ void showLicensePage({
 /// used by the application.
 ///
 /// To show an [AboutDialog], use [showAboutDialog].
+///
+/// If the application has a [Drawer], the [AboutDrawerItem] widget can make the
+/// process of showing an about dialog simpler.
+///
+/// The [AboutDialog] shown by [showAboutDialog] includes a button that calls
+/// [showLicensePage].
+///
+/// The licenses shown on the [LicensePage] are those returned by the
+/// [LicenseRegistry] API, which can be used to add more licenses to the list.
 class AboutDialog extends StatelessWidget {
   /// Creates an about box.
   ///
@@ -203,15 +216,13 @@ class AboutDialog extends StatelessWidget {
     this.applicationVersion,
     this.applicationIcon,
     this.applicationLegalese,
-    this.children
+    this.children,
   }) : super(key: key);
 
   /// The name of the application.
   ///
   /// Defaults to the value of [Title.title], if a [Title] widget can be found.
-  /// Otherwise, defaults to "this Flutter application".
-  // TODO(ianh): once https://github.com/flutter/flutter/issues/3648 is fixed:
-  // /// Otherwise, defaults to [Platform.resolvedExecutable].
+  /// Otherwise, defaults to [Platform.resolvedExecutable].
   final String applicationName;
 
   /// The version of this build of the application.
@@ -251,10 +262,10 @@ class AboutDialog extends StatelessWidget {
     final Widget icon = applicationIcon ?? _defaultApplicationIcon(context);
     List<Widget> body = <Widget>[];
     if (icon != null)
-      body.add(new IconTheme(data: new IconThemeData(size: 48.0), child: icon));
-    body.add(new Flexible(
+      body.add(new IconTheme(data: const IconThemeData(size: 48.0), child: icon));
+    body.add(new Expanded(
       child: new Padding(
-        padding: new EdgeInsets.symmetric(horizontal: 24.0),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0),
         child: new BlockBody(
           children: <Widget>[
             new Text(name, style: Theme.of(context).textTheme.headline),
@@ -274,8 +285,8 @@ class AboutDialog extends StatelessWidget {
     if (children != null)
       body.addAll(children);
     return new AlertDialog(
-      content: new Block(
-        children: body
+      content: new SingleChildScrollView(
+        child: new BlockBody(children: body),
       ),
       actions: <Widget>[
         new FlatButton(
@@ -304,14 +315,21 @@ class AboutDialog extends StatelessWidget {
 /// A page that shows licenses for software used by the application.
 ///
 /// To show a [LicensePage], use [showLicensePage].
-// TODO(ianh): Mention the API for registering more licenses once it exists.
+///
+/// The [AboutDialog] shown by [showAboutDialog] and [AboutDrawerItem] includes
+/// a button that calls [showLicensePage].
+///
+/// The licenses shown on the [LicensePage] are those returned by the
+/// [LicenseRegistry] API, which can be used to add more licenses to the list.
 class LicensePage extends StatefulWidget {
   /// Creates a page that shows licenses for software used by the application.
   ///
   /// The arguments are all optional. The application name, if omitted, will be
   /// derived from the nearest [Title] widget. The version and legalese values
   /// default to the empty string.
-  // TODO(ianh): Mention the API for registering more licenses once it exists.
+  ///
+  /// The licenses shown on the [LicensePage] are those returned by the
+  /// [LicenseRegistry] API, which can be used to add more licenses to the list.
   const LicensePage({
     Key key,
     this.applicationName,
@@ -322,9 +340,7 @@ class LicensePage extends StatefulWidget {
   /// The name of the application.
   ///
   /// Defaults to the value of [Title.title], if a [Title] widget can be found.
-  /// Otherwise, defaults to "this Flutter application".
-  // TODO(ianh): once https://github.com/flutter/flutter/issues/3648 is fixed:
-  // /// Otherwise, defaults to [Platform.resolvedExecutable].
+  /// Otherwise, defaults to [Platform.resolvedExecutable].
   final String applicationName;
 
   /// The version of this build of the application.
@@ -358,31 +374,33 @@ class _LicensePageState extends State<LicensePage> {
 
   Future<Null> _initLicenses() async {
     await for (LicenseEntry license in LicenseRegistry.licenses) {
+      if (!mounted)
+        return;
       setState(() {
         _licenses.add(new Padding(
-          padding: new EdgeInsets.symmetric(vertical: 18.0),
+          padding: const EdgeInsets.symmetric(vertical: 18.0),
           child: new Text(
             '🍀‬', // That's U+1F340. Could also use U+2766 (❦) if U+1F340 doesn't work everywhere.
             textAlign: TextAlign.center
           )
         ));
         _licenses.add(new Container(
-          decoration: new BoxDecoration(
-            border: new Border(bottom: new BorderSide(width: 0.0))
+          decoration: const BoxDecoration(
+            border: const Border(bottom: const BorderSide(width: 0.0))
           ),
           child: new Text(
             license.packages.join(', '),
-            style: new TextStyle(fontWeight: FontWeight.bold),
+            style: const TextStyle(fontWeight: FontWeight.bold),
             textAlign: TextAlign.center
           )
         ));
         for (LicenseParagraph paragraph in license.paragraphs) {
           if (paragraph.indent == LicenseParagraph.centeredIndent) {
             _licenses.add(new Padding(
-              padding: new EdgeInsets.only(top: 16.0),
+              padding: const EdgeInsets.only(top: 16.0),
               child: new Text(
                 paragraph.text,
-                style: new TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center
               )
             ));
@@ -417,7 +435,7 @@ class _LicensePageState extends State<LicensePage> {
     contents.addAll(_licenses);
     if (!_loaded) {
       contents.add(new Padding(
-        padding: new EdgeInsets.symmetric(vertical: 24.0),
+        padding: const EdgeInsets.symmetric(vertical: 24.0),
         child: new Center(
           child: new CircularProgressIndicator()
         )
@@ -431,7 +449,7 @@ class _LicensePageState extends State<LicensePage> {
         style: Theme.of(context).textTheme.caption,
         child: new Scrollbar(
           child: new LazyBlock(
-            padding: new EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 12.0),
             delegate: new LazyBlockChildren(
               children: contents
             )
@@ -444,11 +462,7 @@ class _LicensePageState extends State<LicensePage> {
 
 String _defaultApplicationName(BuildContext context) {
   Title ancestorTitle = context.ancestorWidgetOfExactType(Title);
-  return ancestorTitle?.title ?? 'this Flutter application';
-  // TODO(ianh): once https://github.com/flutter/flutter/issues/3648 is fixed,
-  // replace the string in the previous line with:
-  //   Platform.resolvedExecutable.split(Platform.pathSeparator).last
-  // (then fix the dartdocs in the classes above)
+  return ancestorTitle?.title ?? Platform.resolvedExecutable.split(Platform.pathSeparator).last;
 }
 
 String _defaultApplicationVersion(BuildContext context) {

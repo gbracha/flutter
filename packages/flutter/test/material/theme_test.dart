@@ -6,6 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('ThemeDataTween control test', () {
+    ThemeData light = new ThemeData.light();
+    ThemeData dark = new ThemeData.light();
+    ThemeDataTween tween = new ThemeDataTween(begin: light, end: dark);
+    expect(tween.lerp(0.25), equals(ThemeData.lerp(light, dark, 0.25)));
+  });
+
   testWidgets('PopupMenu inherits app theme', (WidgetTester tester) async {
     final Key popupMenuButtonKey = new UniqueKey();
     await tester.pumpWidget(
@@ -32,6 +39,21 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
 
     expect(Theme.of(tester.element(find.text('menuItem'))).brightness, equals(Brightness.dark));
+  });
+
+  testWidgets('Fallback theme', (WidgetTester tester) async {
+    BuildContext capturedContext;
+    await tester.pumpWidget(
+      new Builder(
+        builder: (BuildContext context) {
+          capturedContext = context;
+          return new Container();
+        }
+      )
+    );
+
+    expect(Theme.of(capturedContext), equals(new ThemeData.fallback()));
+    expect(Theme.of(capturedContext, shadowThemeOnly: true), isNull);
   });
 
   testWidgets('PopupMenu inherits shadowed app theme', (WidgetTester tester) async {
@@ -113,7 +135,7 @@ void main() {
                 builder: (BuildContext context) {
                   return new RaisedButton(
                     onPressed: () {
-                      showModalBottomSheet(
+                      showModalBottomSheet<Null>(
                         context: context,
                         builder: (BuildContext context) => new Text('bottomSheet'),
                       );
@@ -150,7 +172,7 @@ void main() {
                 builder: (BuildContext context) {
                   return new RaisedButton(
                     onPressed: () {
-                      showDialog(
+                      showDialog<Null>(
                         context: context,
                         child: new Text('dialog'),
                       );
@@ -170,4 +192,43 @@ void main() {
     expect(Theme.of(tester.element(find.text('dialog'))).brightness, equals(Brightness.light));
   });
 
+  testWidgets("Scaffold inherits theme's scaffoldBackgroundColor", (WidgetTester tester) async {
+    const Color green = const Color(0xFF00FF00);
+
+    await tester.pumpWidget(
+      new MaterialApp(
+        theme: new ThemeData(scaffoldBackgroundColor: green),
+        home: new Scaffold(
+          body: new Center(
+            child: new Builder(
+              builder: (BuildContext context) {
+                return new GestureDetector(
+                  onTap: () {
+                    showDialog<Null>(
+                      context: context,
+                      child: new Scaffold(
+                        body: const SizedBox(
+                          width: 200.0,
+                          height: 200.0,
+                        ),
+                      )
+                    );
+                  },
+                  child: new Text('SHOW'),
+                );
+              },
+            ),
+          ),
+        ),
+      )
+    );
+
+    await tester.tap(find.text('SHOW'));
+    await tester.pump(const Duration(seconds: 1));
+
+    List<Material> materials = tester.widgetList(find.byType(Material)).toList();
+    expect(materials.length, equals(2));
+    expect(materials[0].color, green); // app scaffold
+    expect(materials[1].color, green); // dialog scaffold
+  });
 }

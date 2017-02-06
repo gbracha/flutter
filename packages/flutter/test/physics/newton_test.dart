@@ -1,4 +1,4 @@
-// Copyright (c) 2015 The Chromium Authors. All rights reserved.
+// Copyright 2015 The Chromium Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
@@ -70,6 +70,20 @@ void main() {
     expect(friction.dx(1.0), closeTo(endVelocity, epsilon));
   });
 
+  test('BoundedFrictionSimulation control test', () {
+    BoundedFrictionSimulation friction = new BoundedFrictionSimulation(0.3, 100.0, 400.0, 50.0, 150.0);
+
+    friction.tolerance = const Tolerance(velocity: 1.0);
+
+    expect(friction.isDone(0.0), false);
+    expect(friction.x(0.0), 100);
+    expect(friction.dx(0.0), 400.0);
+
+    expect(friction.x(1.0), equals(150.0));
+
+    expect(friction.isDone(1.0), true);
+  });
+
   test('test_gravity', () {
     GravitySimulation gravity = new GravitySimulation(200.0, 100.0, 600.0, 0.0);
 
@@ -119,7 +133,7 @@ void main() {
 
     // Just so we don't forget how to create a desc without the ratio.
     SpringSimulation other = new SpringSimulation(
-        new SpringDescription(mass: 1.0, springConstant: 100.0, damping: 20.0),
+        const SpringDescription(mass: 1.0, springConstant: 100.0, damping: 20.0),
         0.0, 20.0, 20.0);
     expect(other.type, SpringType.criticallyDamped);
   });
@@ -261,7 +275,7 @@ void main() {
       spring: spring,
       drag: 0.025,
     );
-    scroll.tolerance = new Tolerance(velocity: 45.0, distance: 1.5);
+    scroll.tolerance = const Tolerance(velocity: 45.0, distance: 1.5);
 
     expect(scroll.isDone(0.0), false);
     expect(scroll.x(0.0), closeTo(500.0, .0001));

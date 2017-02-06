@@ -3,14 +3,12 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 const double kColorItemHeight = 48.0;
 
 class ColorSwatch {
   ColorSwatch({ this.name, this.colors, this.accentColors, this.threshold: 900});
 
-  final GlobalKey<ScrollableState> scrollableKey = new GlobalKey<ScrollableState>();
   final String name;
   final Map<int, Color> colors;
   final Map<int, Color> accentColors;
@@ -38,7 +36,7 @@ final List<ColorSwatch> colorSwatches = <ColorSwatch>[
   new ColorSwatch(name: 'DEEP ORANGE', colors: Colors.deepOrange, accentColors: Colors.deepOrangeAccent, threshold: 400),
   new ColorSwatch(name: 'BROWN', colors: Colors.brown, threshold: 200),
   new ColorSwatch(name: 'GREY', colors: Colors.grey, threshold: 500),
-  new ColorSwatch(name: 'BLUE GREY', colors: Colors.blueGrey, threshold: 500)
+  new ColorSwatch(name: 'BLUE GREY', colors: Colors.blueGrey, threshold: 500),
 ];
 
 
@@ -66,9 +64,9 @@ class ColorItem extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
           new Text('$prefix$index'),
-          new Text(colorString())
-        ]
-      )
+          new Text(colorString()),
+        ],
+      ),
     );
   }
 }
@@ -79,84 +77,56 @@ class ColorSwatchTabView extends StatelessWidget {
   }
 
   final ColorSwatch swatch;
-  final TextStyle blackTextStyle = Typography.black.body1;
-  final TextStyle whiteTextStyle = Typography.white.body1;
-
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final TextStyle whiteTextStyle = textTheme.body1.copyWith(color: Colors.white);
+    final TextStyle blackTextStyle = textTheme.body1.copyWith(color: Colors.black);
     List<Widget> colorItems =  swatch.colors.keys.map((int index) {
       return new DefaultTextStyle(
         style: index > swatch.threshold ? whiteTextStyle : blackTextStyle,
-        child: new ColorItem(index: index, color: swatch.colors[index])
+        child: new ColorItem(index: index, color: swatch.colors[index]),
       );
-    })
-    .toList();
+    }).toList();
 
     if (swatch.accentColors != null) {
       colorItems.addAll(swatch.accentColors.keys.map((int index) {
         return new DefaultTextStyle(
           style: index > swatch.threshold ? whiteTextStyle : blackTextStyle,
-          child: new ColorItem(index: index, color: swatch.accentColors[index], prefix: 'A')
+          child: new ColorItem(index: index, color: swatch.accentColors[index], prefix: 'A'),
         );
-      })
-      .toList());
+      }).toList());
     }
 
-    return new ScrollableList(
-      scrollableKey: swatch.scrollableKey,
+    return new ListView(
       itemExtent: kColorItemHeight,
-      children: colorItems
+      children: colorItems,
     );
   }
 }
 
-class ColorsDemo extends StatefulWidget {
-  ColorsDemo({ Key key }) : super(key: key);
-
+class ColorsDemo extends StatelessWidget {
   static const String routeName = '/colors';
 
   @override
-  _ColorsDemoState createState() => new _ColorsDemoState();
-}
-
-class _ColorsDemoState extends State<ColorsDemo> {
-
-  ColorSwatch _selectedSwatch;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedSwatch = colorSwatches.first;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return new TabBarSelection<ColorSwatch>(
-      values: colorSwatches,
-      onChanged: (ColorSwatch value) {
-        setState(() {
-          _selectedSwatch = value;
-       });
-      },
+    return new DefaultTabController(
+      length: colorSwatches.length,
       child: new Scaffold(
-        scrollableKey: _selectedSwatch.scrollableKey,
         appBar: new AppBar(
           elevation: 0,
           title: new Text('Colors'),
-          bottom: new TabBar<ColorSwatch>(
+          bottom: new TabBar(
             isScrollable: true,
-            labels: new Map<ColorSwatch, TabLabel>.fromIterable(colorSwatches, value: (ColorSwatch swatch) {
-              return new TabLabel(text: swatch.name);
-            })
-          )
+            tabs: colorSwatches.map((ColorSwatch swatch) => new Tab(text: swatch.name)).toList(),
+          ),
         ),
-        body: new TabBarView<ColorSwatch>(
+        body: new TabBarView(
           children: colorSwatches.map((ColorSwatch swatch) {
             return new ColorSwatchTabView(swatch: swatch);
-          })
-          .toList()
-        )
-      )
+          }).toList(),
+        ),
+      ),
     );
   }
 }

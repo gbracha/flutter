@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 import 'drawer.dart';
 import 'item.dart';
@@ -76,7 +75,11 @@ class GalleryHome extends StatefulWidget {
     this.timeDilation,
     this.onTimeDilationChanged,
     this.showPerformanceOverlay,
-    this.onShowPerformanceOverlayChanged
+    this.onShowPerformanceOverlayChanged,
+    this.checkerboardRasterCacheImages,
+    this.onCheckerboardRasterCacheImagesChanged,
+    this.onPlatformChanged,
+    this.onSendFeedback,
   }) : super(key: key) {
     assert(onThemeChanged != null);
     assert(onTimeDilationChanged != null);
@@ -91,12 +94,19 @@ class GalleryHome extends StatefulWidget {
   final bool showPerformanceOverlay;
   final ValueChanged<bool> onShowPerformanceOverlayChanged;
 
+  final bool checkerboardRasterCacheImages;
+  final ValueChanged<bool> onCheckerboardRasterCacheImagesChanged;
+
+  final ValueChanged<TargetPlatform> onPlatformChanged;
+
+  final VoidCallback onSendFeedback;
+
   @override
   GalleryHomeState createState() => new GalleryHomeState();
 }
 
 class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderStateMixin {
-  static final Key _homeKey = new ValueKey<String>('Gallery Home');
+  static final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
   static final GlobalKey<ScrollableState> _scrollableKey = new GlobalKey<ScrollableState>();
 
   AnimationController _controller;
@@ -145,7 +155,7 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
   Widget build(BuildContext context) {
     final double statusBarHeight = MediaQuery.of(context).padding.top;
     Widget home = new Scaffold(
-      key: _homeKey,
+      key: _scaffoldKey,
       scrollableKey: _scrollableKey,
       drawer: new GalleryDrawer(
         useLightTheme: config.useLightTheme,
@@ -153,7 +163,11 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
         timeDilation: config.timeDilation,
         onTimeDilationChanged: config.onTimeDilationChanged,
         showPerformanceOverlay: config.showPerformanceOverlay,
-        onShowPerformanceOverlayChanged: config.onShowPerformanceOverlayChanged
+        onShowPerformanceOverlayChanged: config.onShowPerformanceOverlayChanged,
+        checkerboardRasterCacheImages: config.checkerboardRasterCacheImages,
+        onCheckerboardRasterCacheImagesChanged: config.onCheckerboardRasterCacheImagesChanged,
+        onPlatformChanged: config.onPlatformChanged,
+        onSendFeedback: config.onSendFeedback,
       ),
       appBar: new AppBar(
         expandedHeight: _kFlexibleSpaceMaxHeight,
@@ -162,7 +176,7 @@ class GalleryHomeState extends State<GalleryHome> with SingleTickerProviderState
           background: new Builder(
             builder: (BuildContext context) {
               return new _AppBarBackground(
-                animation: Scaffold.of(context)?.appBarAnimation
+                animation: _scaffoldKey.currentState.appBarAnimation
               );
             }
           )

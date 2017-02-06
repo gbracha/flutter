@@ -45,6 +45,8 @@ const Color _kDarkThemeSplashColor = const Color(0x40CCCCCC);
 /// Holds the color and typography values for a material design theme.
 ///
 /// Use this class to configure a [Theme] widget.
+///
+/// To obtain the current theme, use [Theme.of].
 class ThemeData {
   /// Create a ThemeData given a set of preferred values.
   ///
@@ -64,7 +66,7 @@ class ThemeData {
   ///    ([accentColorBrightness]), so that the right contrasting text
   ///    color will be used over the accent color.
   ///
-  /// See <https://www.google.com/design/spec/style/color.html> for
+  /// See <https://material.google.com/style/color.html> for
   /// more discussion on how to pick the right colors.
   factory ThemeData({
     Brightness brightness,
@@ -74,6 +76,7 @@ class ThemeData {
     Color accentColor,
     Brightness accentColorBrightness,
     Color canvasColor,
+    Color scaffoldBackgroundColor,
     Color cardColor,
     Color dividerColor,
     Color highlightColor,
@@ -86,13 +89,16 @@ class ThemeData {
     Color textSelectionColor,
     Color textSelectionHandleColor,
     Color backgroundColor,
+    Color dialogBackgroundColor,
     Color indicatorColor,
     Color hintColor,
     Color errorColor,
     TextTheme textTheme,
     TextTheme primaryTextTheme,
+    TextTheme accentTextTheme,
     IconThemeData iconTheme,
     IconThemeData primaryIconTheme,
+    IconThemeData accentIconTheme,
     TargetPlatform platform
   }) {
     brightness ??= Brightness.light;
@@ -102,8 +108,10 @@ class ThemeData {
     primaryColorBrightness ??= Brightness.dark;
     final bool primaryIsDark = primaryColorBrightness == Brightness.dark;
     accentColor ??= isDark ? Colors.tealAccent[200] : primarySwatch[500];
-    accentColorBrightness ??= Brightness.dark;
+    accentColorBrightness ??= isDark ? Brightness.light : Brightness.dark;
+    final bool accentIsDark = accentColorBrightness == Brightness.dark;
     canvasColor ??= isDark ? Colors.grey[850] : Colors.grey[50];
+    scaffoldBackgroundColor ??= canvasColor;
     cardColor ??= isDark ? Colors.grey[800] : Colors.white;
     dividerColor ??= isDark ? const Color(0x1FFFFFFF) : const Color(0x1F000000);
     highlightColor ??= isDark ? _kDarkThemeHighlightColor : _kLightThemeHighlightColor;
@@ -117,14 +125,18 @@ class ThemeData {
     textSelectionColor ??= isDark ? accentColor : primarySwatch[200];
     textSelectionHandleColor ??= isDark ? Colors.tealAccent[400] : primarySwatch[300];
     backgroundColor ??= isDark ? Colors.grey[700] : primarySwatch[200];
+    dialogBackgroundColor ??= isDark ? Colors.grey[800] : Colors.white;
     indicatorColor ??= accentColor == primaryColor ? Colors.white : accentColor;
     hintColor ??= isDark ? const Color(0x42FFFFFF) : const Color(0x4C000000);
     errorColor ??= Colors.red[700];
-    textTheme ??= isDark ? Typography.white : Typography.black;
-    primaryTextTheme ??= primaryIsDark ? Typography.white : Typography.black;
     iconTheme ??= isDark ? const IconThemeData(color: Colors.white) : const IconThemeData(color: Colors.black);
     primaryIconTheme ??= primaryIsDark ? const IconThemeData(color: Colors.white) : const IconThemeData(color: Colors.black);
+    accentIconTheme ??= accentIsDark ? const IconThemeData(color: Colors.white) : const IconThemeData(color: Colors.black);
     platform ??= defaultTargetPlatform;
+    final Typography typography = new Typography(platform: platform);
+    textTheme ??= isDark ? typography.white : typography.black;
+    primaryTextTheme ??= primaryIsDark ? typography.white : typography.black;
+    accentTextTheme ??= accentIsDark ? typography.white : typography.black;
     return new ThemeData.raw(
       brightness: brightness,
       primaryColor: primaryColor,
@@ -132,6 +144,7 @@ class ThemeData {
       accentColor: accentColor,
       accentColorBrightness: accentColorBrightness,
       canvasColor: canvasColor,
+      scaffoldBackgroundColor: scaffoldBackgroundColor,
       cardColor: cardColor,
       dividerColor: dividerColor,
       highlightColor: highlightColor,
@@ -144,13 +157,16 @@ class ThemeData {
       textSelectionColor: textSelectionColor,
       textSelectionHandleColor: textSelectionHandleColor,
       backgroundColor: backgroundColor,
+      dialogBackgroundColor: dialogBackgroundColor,
       indicatorColor: indicatorColor,
       hintColor: hintColor,
       errorColor: errorColor,
       textTheme: textTheme,
       primaryTextTheme: primaryTextTheme,
+      accentTextTheme: accentTextTheme,
       iconTheme: iconTheme,
       primaryIconTheme: primaryIconTheme,
+      accentIconTheme: accentIconTheme,
       platform: platform
     );
   }
@@ -168,6 +184,7 @@ class ThemeData {
     this.accentColor,
     this.accentColorBrightness,
     this.canvasColor,
+    this.scaffoldBackgroundColor,
     this.cardColor,
     this.dividerColor,
     this.highlightColor,
@@ -180,13 +197,16 @@ class ThemeData {
     this.textSelectionColor,
     this.textSelectionHandleColor,
     this.backgroundColor,
+    this.dialogBackgroundColor,
     this.indicatorColor,
     this.hintColor,
     this.errorColor,
     this.textTheme,
     this.primaryTextTheme,
+    this.accentTextTheme,
     this.iconTheme,
     this.primaryIconTheme,
+    this.accentIconTheme,
     this.platform
   }) {
     assert(brightness != null);
@@ -195,6 +215,8 @@ class ThemeData {
     assert(accentColor != null);
     assert(accentColorBrightness != null);
     assert(canvasColor != null);
+    assert(scaffoldBackgroundColor != null);
+    assert(dialogBackgroundColor != null);
     assert(cardColor != null);
     assert(dividerColor != null);
     assert(highlightColor != null);
@@ -212,8 +234,10 @@ class ThemeData {
     assert(errorColor != null);
     assert(textTheme != null);
     assert(primaryTextTheme != null);
+    assert(accentTextTheme != null);
     assert(iconTheme != null);
     assert(primaryIconTheme != null);
+    assert(accentIconTheme != null);
     assert(platform != null);
   }
 
@@ -243,21 +267,24 @@ class ThemeData {
   /// The background color for major parts of the app (toolbars, tab bars, etc)
   final Color primaryColor;
 
-  /// The brightness of the primaryColor. Used to determine the color of text and
+  /// The brightness of the [primaryColor]. Used to determine the color of text and
   /// icons placed on top of the primary color (e.g. toolbar text).
   final Brightness primaryColorBrightness;
 
   /// The foreground color for widgets (knobs, text, etc)
   final Color accentColor;
 
-  /// The brightness of the accentColor. Used to determine the color of text
+  /// The brightness of the [accentColor]. Used to determine the color of text
   /// and icons placed on top of the accent color (e.g. the icons on a floating
   /// action button).
   final Brightness accentColorBrightness;
 
-  /// The color of [Material] when it is of infinite extent, e.g. the
-  /// body of a [Scaffold].
+  /// The default color of [MaterialType.canvas] [Material].
   final Color canvasColor;
+
+  /// The default color of the [Material] that underlies the [Scaffold]. The
+  /// background color for a typical material app or a page within the app.
+  final Color scaffoldBackgroundColor;
 
   /// The color of [Material] when it is used as a [Card].
   final Color cardColor;
@@ -305,6 +332,9 @@ class ThemeData {
   /// remaining part of a progress bar.
   final Color backgroundColor;
 
+  /// The background color of [Dialog] elements.
+  final Color dialogBackgroundColor;
+  
   /// The color of the selected tab indicator in a tab bar.
   final Color indicatorColor;
 
@@ -321,16 +351,89 @@ class ThemeData {
   /// A text theme that contrasts with the primary color.
   final TextTheme primaryTextTheme;
 
+  /// A text theme that contrasts with the accent color.
+  final TextTheme accentTextTheme;
+
   /// An icon theme that contrasts with the card and canvas colors.
   final IconThemeData iconTheme;
 
   /// An icon theme that contrasts with the primary color.
   final IconThemeData primaryIconTheme;
 
+  /// An icon theme that contrasts with the accent color.
+  final IconThemeData accentIconTheme;
+
   /// The platform the material widgets should adapt to target.
   ///
   /// Defaults to the current platform.
   final TargetPlatform platform;
+
+  /// Creates a copy of this theme but with the given fields replaced with the new values.
+  ThemeData copyWith({
+    Brightness brightness,
+    Color primaryColor,
+    Brightness primaryColorBrightness,
+    Color accentColor,
+    Brightness accentColorBrightness,
+    Color canvasColor,
+    Color scaffoldBackgroundColor,
+    Color cardColor,
+    Color dividerColor,
+    Color highlightColor,
+    Color splashColor,
+    Color selectedRowColor,
+    Color unselectedWidgetColor,
+    Color disabledColor,
+    Color buttonColor,
+    Color secondaryHeaderColor,
+    Color textSelectionColor,
+    Color textSelectionHandleColor,
+    Color backgroundColor,
+    Color dialogBackgroundColor,
+    Color indicatorColor,
+    Color hintColor,
+    Color errorColor,
+    TextTheme textTheme,
+    TextTheme primaryTextTheme,
+    TextTheme accentTextTheme,
+    IconThemeData iconTheme,
+    IconThemeData primaryIconTheme,
+    IconThemeData accentIconTheme,
+    TargetPlatform platform,
+  }) {
+    return new ThemeData.raw(
+      brightness: brightness ?? this.brightness,
+      primaryColor: primaryColor ?? this.primaryColor,
+      primaryColorBrightness: primaryColorBrightness ?? this.primaryColorBrightness,
+      accentColor: accentColor ?? this.accentColor,
+      accentColorBrightness: accentColorBrightness ?? this.accentColorBrightness,
+      canvasColor: canvasColor ?? this.canvasColor,
+      scaffoldBackgroundColor: scaffoldBackgroundColor ?? this.scaffoldBackgroundColor,
+      cardColor: cardColor ?? this.cardColor,
+      dividerColor: dividerColor ?? this.dividerColor,
+      highlightColor: highlightColor ?? this.highlightColor,
+      splashColor: splashColor ?? this.splashColor,
+      selectedRowColor: selectedRowColor ?? this.selectedRowColor,
+      unselectedWidgetColor: unselectedWidgetColor ?? this.unselectedWidgetColor,
+      disabledColor: disabledColor ?? this.disabledColor,
+      buttonColor: buttonColor ?? this.buttonColor,
+      secondaryHeaderColor: secondaryHeaderColor ?? this.secondaryHeaderColor,
+      textSelectionColor: textSelectionColor ?? this.textSelectionColor,
+      textSelectionHandleColor: textSelectionHandleColor ?? this.textSelectionHandleColor,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      dialogBackgroundColor: dialogBackgroundColor ?? this.dialogBackgroundColor,
+      indicatorColor: indicatorColor ?? this.indicatorColor,
+      hintColor: hintColor ?? this.hintColor,
+      errorColor: errorColor ?? this.errorColor,
+      textTheme: textTheme ?? this.textTheme,
+      primaryTextTheme: primaryTextTheme ?? this.primaryTextTheme,
+      accentTextTheme: accentTextTheme ?? this.accentTextTheme,
+      iconTheme: iconTheme ?? this.iconTheme,
+      primaryIconTheme: primaryIconTheme ?? this.primaryIconTheme,
+      accentIconTheme: accentIconTheme ?? this.accentIconTheme,
+      platform: platform ?? this.platform,
+    );
+  }
 
   /// Linearly interpolate between two themes.
   static ThemeData lerp(ThemeData begin, ThemeData end, double t) {
@@ -339,6 +442,7 @@ class ThemeData {
       primaryColor: Color.lerp(begin.primaryColor, end.primaryColor, t),
       primaryColorBrightness: t < 0.5 ? begin.primaryColorBrightness : end.primaryColorBrightness,
       canvasColor: Color.lerp(begin.canvasColor, end.canvasColor, t),
+      scaffoldBackgroundColor: Color.lerp(begin.scaffoldBackgroundColor, end.scaffoldBackgroundColor, t),
       cardColor: Color.lerp(begin.cardColor, end.cardColor, t),
       dividerColor: Color.lerp(begin.dividerColor, end.dividerColor, t),
       highlightColor: Color.lerp(begin.highlightColor, end.highlightColor, t),
@@ -351,6 +455,7 @@ class ThemeData {
       textSelectionColor: Color.lerp(begin.textSelectionColor, end.textSelectionColor, t),
       textSelectionHandleColor: Color.lerp(begin.textSelectionHandleColor, end.textSelectionHandleColor, t),
       backgroundColor: Color.lerp(begin.backgroundColor, end.backgroundColor, t),
+      dialogBackgroundColor: Color.lerp(begin.dialogBackgroundColor, end.dialogBackgroundColor, t),
       accentColor: Color.lerp(begin.accentColor, end.accentColor, t),
       accentColorBrightness: t < 0.5 ? begin.accentColorBrightness : end.accentColorBrightness,
       indicatorColor: Color.lerp(begin.indicatorColor, end.indicatorColor, t),
@@ -358,8 +463,10 @@ class ThemeData {
       errorColor: Color.lerp(begin.errorColor, end.errorColor, t),
       textTheme: TextTheme.lerp(begin.textTheme, end.textTheme, t),
       primaryTextTheme: TextTheme.lerp(begin.primaryTextTheme, end.primaryTextTheme, t),
+      accentTextTheme: TextTheme.lerp(begin.accentTextTheme, end.accentTextTheme, t),
       iconTheme: IconThemeData.lerp(begin.iconTheme, end.iconTheme, t),
       primaryIconTheme: IconThemeData.lerp(begin.primaryIconTheme, end.primaryIconTheme, t),
+      accentIconTheme: IconThemeData.lerp(begin.accentIconTheme, end.accentIconTheme, t),
       platform: t < 0.5 ? begin.platform : end.platform
     );
   }
@@ -373,6 +480,7 @@ class ThemeData {
            (otherData.primaryColor == primaryColor) &&
            (otherData.primaryColorBrightness == primaryColorBrightness) &&
            (otherData.canvasColor == canvasColor) &&
+           (otherData.scaffoldBackgroundColor == scaffoldBackgroundColor) &&
            (otherData.cardColor == cardColor) &&
            (otherData.dividerColor == dividerColor) &&
            (otherData.highlightColor == highlightColor) &&
@@ -385,6 +493,7 @@ class ThemeData {
            (otherData.textSelectionColor == textSelectionColor) &&
            (otherData.textSelectionHandleColor == textSelectionHandleColor) &&
            (otherData.backgroundColor == backgroundColor) &&
+           (otherData.dialogBackgroundColor == dialogBackgroundColor) &&
            (otherData.accentColor == accentColor) &&
            (otherData.accentColorBrightness == accentColorBrightness) &&
            (otherData.indicatorColor == indicatorColor) &&
@@ -392,8 +501,11 @@ class ThemeData {
            (otherData.errorColor == errorColor) &&
            (otherData.textTheme == textTheme) &&
            (otherData.primaryTextTheme == primaryTextTheme) &&
+           (otherData.accentTextTheme == accentTextTheme) &&
            (otherData.iconTheme == iconTheme) &&
-           (otherData.primaryIconTheme == primaryIconTheme);
+           (otherData.primaryIconTheme == primaryIconTheme) &&
+           (otherData.accentIconTheme == accentIconTheme) &&
+           (otherData.platform == platform);
   }
 
   @override
@@ -403,6 +515,7 @@ class ThemeData {
       primaryColor,
       primaryColorBrightness,
       canvasColor,
+      scaffoldBackgroundColor,
       cardColor,
       dividerColor,
       highlightColor,
@@ -419,16 +532,20 @@ class ThemeData {
       accentColorBrightness,
       hashValues( // Too many values.
         indicatorColor,
+        dialogBackgroundColor,
         hintColor,
         errorColor,
         textTheme,
         primaryTextTheme,
+        accentTextTheme,
         iconTheme,
-        primaryIconTheme
+        primaryIconTheme,
+        accentIconTheme,
+        platform,
       )
     );
   }
 
   @override
-  String toString() => '$runtimeType($brightness $primaryColor etc...)';
+  String toString() => '$runtimeType(${ platform != defaultTargetPlatform ? "$platform " : ''}$brightness $primaryColor etc...)';
 }

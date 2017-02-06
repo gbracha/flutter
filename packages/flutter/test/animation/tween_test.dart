@@ -6,8 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'animation_tester.dart';
-
 void main() {
   test('Can chain tweens', () {
     Tween<double> tween = new Tween<double>(begin: 0.30, end: 0.50);
@@ -33,8 +31,8 @@ void main() {
   });
 
   test('SizeTween', () {
-    SizeTween tween = new SizeTween(begin: Size.zero, end: new Size(20.0, 30.0));
-    expect(tween.lerp(0.5), equals(new Size(10.0, 15.0)));
+    SizeTween tween = new SizeTween(begin: Size.zero, end: const Size(20.0, 30.0));
+    expect(tween.lerp(0.5), equals(const Size(10.0, 15.0)));
     expect(tween, hasOneLineDescription);
   });
 
@@ -42,5 +40,13 @@ void main() {
     IntTween tween = new IntTween(begin: 5, end: 9);
     expect(tween.lerp(0.5), 7);
     expect(tween.lerp(0.7), 8);
+  });
+
+  test('RectTween', () {
+    Rect a = new Rect.fromLTWH(5.0, 3.0, 7.0, 11.0);
+    Rect b = new Rect.fromLTWH(8.0, 12.0, 14.0, 18.0);
+    RectTween tween = new RectTween(begin: a, end: b);
+    expect(tween.lerp(0.5), equals(Rect.lerp(a, b, 0.5)));
+    expect(tween, hasOneLineDescription);
   });
 }

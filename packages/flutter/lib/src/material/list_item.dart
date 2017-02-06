@@ -3,30 +3,42 @@
 // found in the LICENSE file.
 
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 
 import 'constants.dart';
 import 'debug.dart';
 import 'ink_well.dart';
 import 'theme.dart';
 
-/// An item in a material design list.
+/// A single row typically containing an icon and some text.
 ///
-/// [MaterialList] items are one to three lines of text optionally flanked by
-/// icons. Icons are defined with the [leading] and [trailing] parameters. The
-/// first line of text is not optional and is specified with [title]. The value
-/// of [subtitle] will occupy the space allocated for an aditional line of text,
-/// or two lines if [isThreeLine] is true. If [dense] is true then the overall
-/// height of this list item and the size of the [DefaultTextStyle]s that wrap
-/// the [title] and [subtitle] widget are reduced.
+/// List items are one to three lines of text optionally flanked by icons or
+/// other widgets, such as check boxes. The icons (or other widgets) for the
+/// item are defined with the [leading] and [trailing] parameters. The first
+/// line of text is not optional and is specified with [title]. The value of
+/// [subtitle], which _is_ optional, will occupy the space allocated for an
+/// additional line of text, or two lines if [isThreeLine] is true. If [dense]
+/// is true then the overall height of this list item and the size of the
+/// [DefaultTextStyle]s that wrap the [title] and [subtitle] widget are reduced.
+///
+/// List items are always a fixed height (which height depends on how
+/// [isThreeLine], [dense], and [subtitle] are configured); they do not grow in
+/// height based on their contents. If you are looking for a widget that allows
+/// for arbitrary layout in a row, consider [Row].
+///
+/// List items are typically used in [MaterialList]s or in [Card]s.
 ///
 /// Requires one of its ancestors to be a [Material] widget.
 ///
 /// See also:
 ///
-///  * [MaterialList]
-///  * [CircleAvatar]
-///  * [Divider]
-///  * <https://www.google.com/design/spec/components/lists.html>
+///  * [MaterialList], which takes a list of [ListItem] widgets and shows them
+///    as a scrolling list.
+///  * [Card], which can be used with [Column] to show a few [ListItem]s.
+///  * [CircleAvatar], which shows an icon representing a person.
+///  * [Divider], which can be used to separate [ListItem]s.
+///  * [ListItem.divideItems], another way to separate [ListItem]s.
+///  * <https://material.google.com/components/lists.html>
 class ListItem extends StatelessWidget {
   /// Creates a list item.
   ///
@@ -77,7 +89,7 @@ class ListItem extends StatelessWidget {
 
   /// Whether this list item is interactive.
   ///
-  /// If `false`, this list item is styled with the disabled color from the
+  /// If false, this list item is styled with the disabled color from the
   /// current [Theme] and the [onTap] and [onLongPress] callbacks are
   /// inoperative.
   final bool enabled;
@@ -93,8 +105,12 @@ class ListItem extends StatelessWidget {
   final GestureLongPressCallback onLongPress;
 
   /// Add a one pixel border in between each item. If color isn't specified the
-  /// dividerColor of the context's theme is used.
-  static Iterable<Widget> divideItems({ BuildContext context, Iterable<Widget> items, Color color }) sync* {
+  /// [ThemeData.dividerColor] of the context's [Theme] is used.
+  ///
+  /// See also:
+  ///
+  /// * [Divider], which you can use to obtain this effect manually.
+  static Iterable<Widget> divideItems({ BuildContext context, @required Iterable<Widget> items, Color color }) sync* {
     assert(items != null);
     assert(color != null || context != null);
 
@@ -103,14 +119,14 @@ class ListItem extends StatelessWidget {
     final bool isNotEmpty = iterator.moveNext();
 
     Widget item = iterator.current;
-    while(iterator.moveNext()) {
+    while (iterator.moveNext()) {
       yield new DecoratedBox(
         decoration: new BoxDecoration(
           border: new Border(
-            bottom: new BorderSide(color: dividerColor)
-          )
+            bottom: new BorderSide(color: dividerColor),
+          ),
         ),
-        child: item
+        child: item,
       );
       item = iterator.current;
     }
@@ -180,7 +196,7 @@ class ListItem extends StatelessWidget {
         ]
       );
     }
-    children.add(new Flexible(
+    children.add(new Expanded(
       child: center
     ));
 
@@ -199,7 +215,6 @@ class ListItem extends StatelessWidget {
         height: itemHeight,
         padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: new Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: children
         )
       )

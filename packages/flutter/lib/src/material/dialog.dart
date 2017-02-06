@@ -5,10 +5,12 @@
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
+import 'package:meta/meta.dart';
 
 import 'button.dart';
 import 'button_bar.dart';
 import 'colors.dart';
+import 'ink_well.dart';
 import 'material.dart';
 import 'theme.dart';
 
@@ -21,10 +23,10 @@ import 'theme.dart';
 ///
 /// See also:
 ///
-///  * [AlertDialog]
-///  * [SimpleDialog]
-///  * [showDialog]
-///  * <https://www.google.com/design/spec/components/dialogs.html>
+///  * [AlertDialog], for dialogs that have a message and some buttons.
+///  * [SimpleDialog], for dialogs that offer a variety of options.
+///  * [showDialog], which actually displays the dialog and returns its result.
+///  * <https://material.google.com/components/dialogs.html>
 class Dialog extends StatelessWidget {
   /// Creates a dialog.
   ///
@@ -34,27 +36,20 @@ class Dialog extends StatelessWidget {
     this.child,
   }) : super(key: key);
 
+  /// The widget below this widget in the tree.
   final Widget child;
 
   Color _getColor(BuildContext context) {
-    Brightness brightness = Theme.of(context).brightness;
-    assert(brightness != null);
-    switch (brightness) {
-      case Brightness.light:
-        return Colors.white;
-      case Brightness.dark:
-        return Colors.grey[800];
-    }
-    return null;
+    return Theme.of(context).dialogBackgroundColor;
   }
 
   @override
   Widget build(BuildContext context) {
     return new Center(
       child: new Container(
-        margin: new EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
+        margin: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 24.0),
         child: new ConstrainedBox(
-          constraints: new BoxConstraints(minWidth: 280.0),
+          constraints: const BoxConstraints(minWidth: 280.0),
           child: new Material(
             elevation: 24,
             color: _getColor(context),
@@ -76,7 +71,8 @@ class Dialog extends StatelessWidget {
 ///
 /// If the content is too large to fit on the screen vertically, the dialog will
 /// display the title and the actions and let the content overflow. Consider
-/// using a scrolling widget, such as [Block], for [content] to avoid overflow.
+/// using a scrolling widget, such as [ScrollList], for [content] to avoid
+/// overflow.
 ///
 /// For dialogs that offer the user a choice between several options, consider
 /// using a [SimpleDialog].
@@ -86,9 +82,9 @@ class Dialog extends StatelessWidget {
 ///
 /// See also:
 ///
-///  * [SimpleDialog]
-///  * [Dialog]
-///  * [showDialog]
+///  * [SimpleDialog], which handles the scrolling of the contents but has no [actions].
+///  * [Dialog], on which [AlertDialog] and [SimpleDialog] are based.
+///  * [showDialog], which actually displays the dialog and returns its result.
 ///  * <https://material.google.com/components/dialogs.html#dialogs-alerts>
 class AlertDialog extends StatelessWidget {
   /// Creates an alert dialog.
@@ -118,9 +114,9 @@ class AlertDialog extends StatelessWidget {
   /// The (optional) content of the dialog is displayed in the center of the
   /// dialog in a lighter font.
   ///
-  /// Typically, this is a [Block] containing the contents of the dialog. Using
-  /// a [Block] ensures that the contents can scroll if they are too big to fit
-  /// on the display.
+  /// Typically, this is a [ScrollList] containing the contents of the dialog.
+  /// Using a [ScrollList] ensures that the contents can scroll if they are too
+  /// big to fit on the display.
   final Widget content;
 
   /// Padding around the content.
@@ -145,29 +141,28 @@ class AlertDialog extends StatelessWidget {
         padding: titlePadding ?? new EdgeInsets.fromLTRB(24.0, 24.0, 24.0, content == null ? 20.0 : 0.0),
         child: new DefaultTextStyle(
           style: Theme.of(context).textTheme.title,
-          child: title
-        )
+          child: title,
+        ),
       ));
     }
 
     if (content != null) {
       children.add(new Flexible(
-        fit: FlexFit.loose,
         child: new Padding(
           padding: contentPadding ?? const EdgeInsets.fromLTRB(24.0, 20.0, 24.0, 24.0),
           child: new DefaultTextStyle(
             style: Theme.of(context).textTheme.subhead,
-            child: content
-          )
-        )
+            child: content,
+          ),
+        ),
       ));
     }
 
     if (actions != null) {
       children.add(new ButtonTheme.bar(
         child: new ButtonBar(
-          children: actions
-        )
+          children: actions,
+        ),
       ));
     }
 
@@ -176,9 +171,53 @@ class AlertDialog extends StatelessWidget {
         child: new Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: children
-        )
-      )
+          children: children,
+        ),
+      ),
+    );
+  }
+}
+
+/// An option used in a [SimpleDialog].
+///
+/// A simple dialog offers the user a choice between several options. This
+/// widget is commonly used to represent each of the options. If the user
+/// selects this option, the widget will call the [onPressed] callback, which
+/// typically uses [Navigator.pop] to close the dialog.
+///
+/// See also:
+///
+///  * [SimpleDialog], for a dialog in which to use this widget.
+///  * [showDialog], which actually displays the dialog and returns its result.
+///  * [FlatButton], which are commonly used as actions in other kinds of
+///    dialogs, such as [AlertDialog]s.
+///  * <https://material.google.com/components/dialogs.html#dialogs-simple-dialogs>
+class SimpleDialogOption extends StatelessWidget {
+  /// Creates an option for a [SimpleDialog].
+  SimpleDialogOption({
+    Key key,
+    this.onPressed,
+    this.child,
+  }) : super(key: key);
+
+  /// The callback that is called when this option is selected.
+  ///
+  /// If this is set to null, the option cannot be selected.
+  final VoidCallback onPressed;
+
+  /// The widget below this widget in the tree.
+  ///
+  /// Typically a [Text] widget.
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return new InkWell(
+      onTap: onPressed,
+      child: new Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
+        child: child
+      ),
     );
   }
 }
@@ -196,9 +235,10 @@ class AlertDialog extends StatelessWidget {
 ///
 /// See also:
 ///
-///  * [AlertDialog]
-///  * [Dialog]
-///  * [showDialog]
+///  * [SimpleDialogOption], which are options used in this type of dialog.
+///  * [AlertDialog], for dialogs that have a row of buttons below the body.
+///  * [Dialog], on which [SimpleDialog] and [AlertDialog] are based.
+///  * [showDialog], which actually displays the dialog and returns its result.
 ///  * <https://material.google.com/components/dialogs.html#dialogs-simple-dialogs>
 class SimpleDialog extends StatelessWidget {
   /// Creates a simple dialog.
@@ -224,11 +264,10 @@ class SimpleDialog extends StatelessWidget {
   /// padding will be provided.
   final EdgeInsets titlePadding;
 
-  /// The (optional) content of the dialog is displayed in a [Block] underneath
-  /// the title.
+  /// The (optional) content of the dialog is displayed in a
+  /// [SingleChildScrollView] underneath the title.
   ///
-  /// The children are assumed to have 8.0 pixels of vertical and 24.0 pixels of
-  /// horizontal padding internally.
+  /// Typically a list of [SimpleDialogOption]s.
   final List<Widget> children;
 
   /// Padding around the content.
@@ -252,10 +291,9 @@ class SimpleDialog extends StatelessWidget {
 
     if (children != null) {
       body.add(new Flexible(
-        fit: FlexFit.loose,
-        child: new Block(
+        child: new SingleChildScrollView(
           padding: contentPadding ?? const EdgeInsets.fromLTRB(0.0, 12.0, 0.0, 16.0),
-          children: children
+          child: new BlockBody(children: children),
         )
       ));
     }
@@ -268,7 +306,7 @@ class SimpleDialog extends StatelessWidget {
           child: new Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: body
+            children: body,
           )
         )
       )
@@ -320,10 +358,15 @@ class _DialogRoute<T> extends PopupRoute<T> {
 /// [Navigator.pop] when the dialog was closed.
 ///
 /// See also:
-///  * [Dialog]
-///  * <https://www.google.com/design/spec/components/dialogs.html>
-Future<dynamic/*=T*/> showDialog/*<T>*/({ BuildContext context, Widget child }) {
-  return Navigator.push(context, new _DialogRoute<dynamic/*=T*/>(
+///  * [SimpleDialog], which handles the scrolling of the contents but has no [actions].
+///  * [AlertDialog], for dialogs that have a row of buttons below the body.
+///  * [Dialog], on which [SimpleDialog] and [AlertDialog] are based.
+///  * <https://material.google.com/components/dialogs.html>
+Future<T> showDialog<T>({
+  @required BuildContext context,
+  @required Widget child
+}) {
+  return Navigator.push(context, new _DialogRoute<T>(
     child: child,
     theme: Theme.of(context, shadowThemeOnly: true),
   ));

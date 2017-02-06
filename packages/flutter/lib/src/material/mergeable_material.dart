@@ -2,9 +2,9 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:meta/meta.dart';
 
 import 'dart:ui' show lerpDouble;
 
@@ -35,7 +35,7 @@ class MaterialSlice extends MergeableMaterialItem {
   /// [MergeableMaterial].
   MaterialSlice({
     @required LocalKey key,
-    this.child
+    @required this.child,
   }) : super(key) {
     assert(key != null);
   }
@@ -87,6 +87,11 @@ class MaterialGap extends MergeableMaterialItem {
 ///
 /// When a new slice is added or removed, the app is responsible for animating
 /// the transition of the slices, while the gaps will be animated automatically.
+///
+/// See also:
+///
+///  * [Card], a piece of material that does not support splitting and merging
+///    but otherwise looks the same.
 class MergeableMaterial extends StatefulWidget {
   /// Creates a mergeable Material list of items.
   MergeableMaterial({
@@ -103,7 +108,11 @@ class MergeableMaterial extends StatefulWidget {
   /// The main layout axis.
   final Axis mainAxis;
 
-  /// The elevation of all the [Material] slices.
+  /// The z-coordinate at which to place all the [Material] slices.
+  ///
+  /// The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9, 12, 16, 24
+  ///
+  /// Defaults to 2, the appropriate elevation for cards.
   final int elevation;
 
   /// Whether connected pieces of [MaterialSlice] have dividers between them.
@@ -169,16 +178,12 @@ class _MergeableMaterialState extends State<MergeableMaterial> with TickerProvid
       parent: controller,
       curve: Curves.fastOutSlowIn
     );
-
-    startAnimation.addListener(_handleTick);
-    endAnimation.addListener(_handleTick);
-
     final CurvedAnimation gapAnimation = new CurvedAnimation(
       parent: controller,
       curve: Curves.fastOutSlowIn
     );
 
-    gapAnimation.addListener(_handleTick);
+    controller.addListener(_handleTick);
 
     _animationTuples[gap.key] = new _AnimationTuple(
       controller: controller,

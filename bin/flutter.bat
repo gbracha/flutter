@@ -1,53 +1,76 @@
 @ECHO off
-REM Copyright 2015 The Chromium Authors. All rights reserved.
+REM Copyright 2017 The Chromium Authors. All rights reserved.
 REM Use of this source code is governed by a BSD-style license that can be
 REM found in the LICENSE file.
 
+
+REM ---------------------------------- NOTE ----------------------------------
+REM
+REM Please keep the logic in this file consistent with the logic in the
+REM `flutter` script in the same directory to ensure that Flutter continues to
+REM work across all platforms!
+REM
+REM --------------------------------------------------------------------------
+
 SETLOCAL ENABLEDELAYEDEXPANSION
-FOR %%i IN ("%~dp0..") DO SET "flutter_root=%%~fi" REM Get the parent directory
-SET flutter_tools_dir=%flutter_root%\packages\flutter_tools
-SET flutter_dir=%flutter_root%\packages\flutter
-SET snapshot_path=%flutter_root%\bin\cache\flutter_tools.snapshot
-SET stamp_path=%flutter_root%\bin\cache\flutter_tools.stamp
+
+FOR %%i IN ("%~dp0..") DO SET FLUTTER_ROOT=%%~fi
+
+SET flutter_tools_dir=%FLUTTER_ROOT%\packages\flutter_tools
+SET snapshot_path=%FLUTTER_ROOT%\bin\cache\flutter_tools.snapshot
+SET stamp_path=%FLUTTER_ROOT%\bin\cache\flutter_tools.stamp
 SET script_path=%flutter_tools_dir%\bin\flutter_tools.dart
-REM TODO: Don't require dart to be on the user's path
-SET dart=dart
+SET dart_sdk_path=%FLUTTER_ROOT%\bin\cache\dart-sdk
 
-REM Set current working directory to the flutter directory
-PUSHD %flutter_root%
-REM IF doesn't have an "or". Instead, just use GOTO
+SET dart=%dart_sdk_path%\bin\dart.exe
+SET pub=%dart_sdk_path%\bin\pub.bat
+
+REM Test if Git is available on the Host
+where /q git.exe || ECHO Error: Unable to find git.exe in your PATH. && EXIT /B
+REM  Test if the flutter directory is a git clone, otherwise git rev-parse HEAD would fail
+IF NOT EXIST "%flutter_root%\.git" (
+  ECHO Error: The Flutter directory is not a clone of the GitHub project.
+  EXIT /B
+)
+
+PUSHD "%flutter_root%"
 FOR /f %%r IN ('git rev-parse HEAD') DO SET revision=%%r
-IF NOT EXIST %snapshot_path% GOTO do_snapshot
-IF NOT EXIST %stamp_path% GOTO do_snapshot
-FOR /f "delims=" %%x in (%stamp_path%) do set stamp_value=%%x
-IF "!stamp_value!" NEQ "!revision!" GOTO do_snapshot
+POPD
 
-REM Getting modified timestamps in a batch file is ... troublesome
-REM More info: http://stackoverflow.com/questions/1687014/how-do-i-compare-timestamps-of-files-in-a-dos-batch-script
-FOR %%f IN (%flutter_tools_dir%\pubspec.yaml) DO SET yamlt=%%~tf
-FOR %%a IN (%flutter_tools_dir%\pubspec.lock) DO SET lockt=%%~ta
+REM The following IF conditions are all linked with a logical OR. However,
+REM there is no OR operator in batch and a GOTO construct is used as replacement.
+IF NOT EXIST "%snapshot_path%" GOTO do_snapshot
+IF NOT EXIST "%stamp_path%" GOTO do_snapshot
+SET /p stamp_value=<"%stamp_path%"
+IF !stamp_value! NEQ !revision! GOTO do_snapshot
+REM Get modified timestamps
+FOR %%f IN ("%flutter_tools_dir%\pubspec.yaml") DO SET yamlt=%%~tf
+FOR %%a IN ("%flutter_tools_dir%\pubspec.lock") DO SET lockt=%%~ta
 IF !lockt! LSS !yamlt! GOTO do_snapshot
 
-GOTO :after_snapshot
+GOTO after_snapshot
 
 :do_snapshot
-CD "%flutter_tools_dir%"
-ECHO Updating flutter tool...
-CALL pub.bat get
-CD "%flutter_dir%"
-REM Allows us to check if sky_engine's REVISION is correct
-CALL pub.bat get
-CD "%flutter_root%"
-CALL %dart% --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" "%script_path%"
-<nul SET /p=%revision%> "%stamp_path%"
+  MKDIR "%FLUTTER_ROOT%\bin\cache" 2> NUL
+  ECHO: > "%FLUTTER_ROOT%\bin\cache\.dartignore"
+
+  ECHO Checking Dart SDK version...
+  CALL PowerShell.exe -ExecutionPolicy Bypass -Command "& '%FLUTTER_ROOT%/bin/internal/update_dart_sdk.ps1'"
+
+  ECHO Updating flutter tool...
+  del "%flutter_tools_dir%\pubspec.lock"
+  PUSHD "%flutter_tools_dir%"
+  CALL "%pub%" get --verbosity=error --no-packages-dir
+  POPD
+  CALL "%dart%" --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" "%script_path%"
+  >"%stamp_path%" ECHO %revision%
 
 :after_snapshot
 
-REM Go back to last working directory
-POPD
-CALL %dart% "%snapshot_path%" %*
+CALL "%dart%" "%snapshot_path%" %*
 
-IF /I "%ERRORLEVEL%" EQU "253" (
-   CALL %dart% --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" "%script_path%"
-   CALL %dart% "%snapshot_path%" %*
+REM The VM exits with code 253 if the snapshot version is out-of-date.
+IF /I "%ERRORLEVEL%" EQU "253" (    
+  CALL "%dart%" --snapshot="%snapshot_path%" --packages="%flutter_tools_dir%\.packages" "%script_path%"    
+  CALL "%dart%" "%snapshot_path%" %*   
 )

@@ -3,22 +3,23 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as path;
 
 import 'context.dart';
+import 'file_system.dart';
+import 'io.dart';
+import 'platform.dart';
 import 'process.dart';
+import 'process_manager.dart';
 
 /// Returns [OperatingSystemUtils] active in the current app context (i.e. zone).
-OperatingSystemUtils get os {
-  return context[OperatingSystemUtils] ?? (context[OperatingSystemUtils] = new OperatingSystemUtils._());
-}
+OperatingSystemUtils get os => context[OperatingSystemUtils];
 
 abstract class OperatingSystemUtils {
-  factory OperatingSystemUtils._() {
-    if (Platform.isWindows) {
+  factory OperatingSystemUtils() {
+    if (platform.isWindows) {
       return new _WindowsUtils();
     } else {
       return new _PosixUtils();
@@ -27,8 +28,9 @@ abstract class OperatingSystemUtils {
 
   OperatingSystemUtils._private();
 
-  String get operatingSystem => Platform.operatingSystem;
 
+  // TODO(tvolkert): Remove these and migrate callers to Platform
+  String get operatingSystem => platform.operatingSystem;
   bool get isMacOS => operatingSystem == 'macos';
   bool get isWindows => operatingSystem == 'windows';
   bool get isLinux => operatingSystem == 'linux';
@@ -44,6 +46,13 @@ abstract class OperatingSystemUtils {
   File makePipe(String path);
 
   void unzip(File file, Directory targetDirectory);
+
+  /// Returns the name of the [binaryName] executable.
+  ///
+  /// No-op on most OS.
+  /// On Windows it returns [binaryName].[winExtension], if [winExtension] is
+  /// specified, or [binaryName].exe otherwise.
+  String getExecutableName(String binaryName, { String winExtension });
 }
 
 class _PosixUtils extends OperatingSystemUtils {
@@ -51,18 +60,18 @@ class _PosixUtils extends OperatingSystemUtils {
 
   @override
   ProcessResult makeExecutable(File file) {
-    return Process.runSync('chmod', <String>['a+x', file.path]);
+    return processManager.runSync(<String>['chmod', 'a+x', file.path]);
   }
 
   /// Return the path to the given executable, or `null` if `which` was not able
   /// to locate the binary.
   @override
   File which(String execName) {
-    ProcessResult result = Process.runSync('which', <String>[execName]);
+    ProcessResult result = processManager.runSync(<String>['which', execName]);
     if (result.exitCode != 0)
       return null;
     String path = result.stdout.trim().split('\n').first.trim();
-    return new File(path);
+    return fs.file(path);
   }
 
   // unzip -o -q zipfile -d dest
@@ -74,8 +83,11 @@ class _PosixUtils extends OperatingSystemUtils {
   @override
   File makePipe(String path) {
     runSync(<String>['mkfifo', path]);
-    return new File(path);
+    return fs.file(path);
   }
+
+  @override
+  String getExecutableName(String binaryName, { String winExtension }) => binaryName;
 }
 
 class _WindowsUtils extends OperatingSystemUtils {
@@ -89,10 +101,10 @@ class _WindowsUtils extends OperatingSystemUtils {
 
   @override
   File which(String execName) {
-    ProcessResult result = Process.runSync('where', <String>[execName]);
+    ProcessResult result = processManager.runSync(<String>['where', execName]);
     if (result.exitCode != 0)
       return null;
-    return new File(result.stdout.trim().split('\n').first.trim());
+    return fs.file(result.stdout.trim().split('\n').first.trim());
   }
 
   @override
@@ -104,7 +116,7 @@ class _WindowsUtils extends OperatingSystemUtils {
       if (!archiveFile.isFile || archiveFile.name.endsWith('/'))
         continue;
 
-      File destFile = new File(path.join(targetDirectory.path, archiveFile.name));
+      File destFile = fs.file(path.join(targetDirectory.path, archiveFile.name));
       if (!destFile.parent.existsSync())
         destFile.parent.createSync(recursive: true);
       destFile.writeAsBytesSync(archiveFile.content);
@@ -114,6 +126,14 @@ class _WindowsUtils extends OperatingSystemUtils {
   @override
   File makePipe(String path) {
     throw new UnsupportedError('makePipe is not implemented on Windows.');
+  }
+
+  @override
+  String getExecutableName(String binaryName, { String winExtension }) {
+    winExtension ??= 'exe';
+    if (path.extension(binaryName).isEmpty && winExtension.isNotEmpty)
+      return '$binaryName.$winExtension';
+    return binaryName;
   }
 }
 
@@ -143,6 +163,7 @@ Future<int> findPreferredPort(int defaultPort, { int searchStep: 2 }) async {
 
 Future<bool> _isPortAvailable(int port) async {
   try {
+    // TODO(ianh): This is super racy.
     ServerSocket socket = await ServerSocket.bind(InternetAddress.LOOPBACK_IP_V4, port);
     await socket.close();
     return true;
@@ -157,11 +178,11 @@ Future<bool> _isPortAvailable(int port) async {
 /// or if the project root is the flutter repository root.
 String findProjectRoot([String directory]) {
   const String kProjectRootSentinel = 'pubspec.yaml';
-  directory ??= Directory.current.path;
+  directory ??= fs.currentDirectory.path;
   while (true) {
-    if (FileSystemEntity.isFileSync(path.join(directory, kProjectRootSentinel)))
+    if (fs.isFileSync(path.join(directory, kProjectRootSentinel)))
       return directory;
-    String parent = FileSystemEntity.parentOf(directory);
+    String parent = path.dirname(directory);
     if (directory == parent) return null;
     directory = parent;
   }

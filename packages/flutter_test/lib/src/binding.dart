@@ -11,7 +11,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/http.dart' as http;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:meta/meta.dart';
 import 'package:quiver/testing/async.dart';
@@ -19,8 +18,8 @@ import 'package:quiver/time.dart';
 import 'package:test/test.dart' as test_package;
 import 'package:vector_math/vector_math_64.dart';
 
-import 'test_async_utils.dart';
 import 'stack_manipulation.dart';
+import 'test_async_utils.dart';
 
 /// Phases that can be reached by [WidgetTester.pumpWidget] and
 /// [TestWidgetsFlutterBinding.pump].
@@ -84,9 +83,17 @@ const Size _kDefaultTestViewportSize = const Size(800.0, 600.0);
 abstract class TestWidgetsFlutterBinding extends BindingBase
   with SchedulerBinding,
        GestureBinding,
-       ServicesBinding,
        RendererBinding,
+       // Services binding omitted to avoid dragging in the licenses code.
        WidgetsBinding {
+
+  TestWidgetsFlutterBinding() {
+    debugPrint = debugPrintOverride;
+  }
+
+  @protected
+  DebugPrintCallback get debugPrintOverride => debugPrint;
+
   /// Creates and initializes the binding. This function is
   /// idempotent; calling it a second time will just return the
   /// previously-created instance.
@@ -112,7 +119,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
   void initInstances() {
     timeDilation = 1.0; // just in case the developer has artificially changed it for development
     http.Client.clientOverride = () {
-      return new http.MockClient((http.Request request){
+      return new http.MockClient((http.BaseRequest request) {
         return new Future<http.Response>.value(
           new http.Response("Mocked: Unavailable.", 404, request: request)
         );
@@ -334,7 +341,12 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
         // _this_ zone, the test framework would find this zone was the current
         // zone and helpfully throw the error in this zone, causing us to be
         // directly called again.
-        final String treeDump = renderViewElement?.toStringDeep() ?? '<no tree>';
+        String treeDump;
+        try {
+          treeDump = renderViewElement?.toStringDeep() ?? '<no tree>';
+        } catch (exception) {
+          treeDump = '<additional error caught while dumping tree: $exception>';
+        }
         final StringBuffer expectLine = new StringBuffer();
         final int stackLinesToOmit = reportExpectCall(stack, expectLine);
         FlutterError.reportError(new FlutterErrorDetails(
@@ -342,7 +354,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
           stack: stack,
           context: 'running a test',
           library: 'Flutter test framework',
-          stackFilter: (List<String> frames) {
+          stackFilter: (Iterable<String> frames) {
             return FlutterError.defaultStackFilter(frames.skip(stackLinesToOmit));
           },
           informationCollector: (StringBuffer information) {
@@ -356,7 +368,7 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
         ));
         assert(_parentZone != null);
         assert(_pendingExceptionDetails != null);
-        _parentZone.run(_testCompletionHandler);
+        _parentZone.run<Null>(_testCompletionHandler);
       }
     );
     _parentZone = Zone.current;
@@ -395,6 +407,19 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
     assert(debugAssertNoTransientCallbacks(
       'An animation is still running even after the widget tree was disposed.'
     ));
+    assert(debugAssertAllFoundationVarsUnset(
+      'The value of a foundation debug variable was changed by the test.',
+      debugPrintOverride: debugPrintOverride,
+    ));
+    assert(debugAssertAllRenderVarsUnset(
+      'The value of a rendering debug variable was changed by the test.'
+    ));
+    assert(debugAssertAllWidgetVarsUnset(
+      'The value of a widget debug variable was changed by the test.'
+    ));
+    assert(debugAssertAllSchedulerVarsUnset(
+      'The value of a scheduler debug variable was changed by the test.'
+    ));
   }
 
   /// Called by the [testWidgets] function after a test is executed.
@@ -418,13 +443,15 @@ abstract class TestWidgetsFlutterBinding extends BindingBase
 class AutomatedTestWidgetsFlutterBinding extends TestWidgetsFlutterBinding {
   @override
   void initInstances() {
-    debugPrint = debugPrintSynchronously;
     super.initInstances();
     ui.window.onBeginFrame = null;
   }
 
   FakeAsync _fakeAsync;
   Clock _clock;
+
+  @override
+  DebugPrintCallback get debugPrintOverride => debugPrintSynchronously;
 
   @override
   test_package.Timeout get defaultTestTimeout => const test_package.Timeout(const Duration(seconds: 5));

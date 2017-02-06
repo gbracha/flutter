@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/create.dart';
 import 'package:flutter_tools/src/commands/format.dart';
@@ -21,7 +21,7 @@ void main() {
 
     setUp(() {
       Cache.disableLocking();
-      temp = Directory.systemTemp.createTempSync('flutter_tools');
+      temp = fs.systemTempDirectory.createTempSync('flutter_tools');
     });
 
     tearDown(() {
@@ -30,23 +30,21 @@ void main() {
 
     Future<Null> createProject() async {
       CreateCommand command = new CreateCommand();
-      CommandRunner runner = createTestCommandRunner(command);
+      CommandRunner<Null> runner = createTestCommandRunner(command);
 
-      int code = await runner.run(<String>['create', '--no-pub', temp.path]);
-      expect(code, 0);
+      await runner.run(<String>['create', '--no-pub', temp.path]);
     }
 
     testUsingContext('a file', () async {
       await createProject();
 
-      File srcFile = new File(path.join(temp.path, 'lib', 'main.dart'));
+      File srcFile = fs.file(path.join(temp.path, 'lib', 'main.dart'));
       String original = srcFile.readAsStringSync();
       srcFile.writeAsStringSync(original.replaceFirst('main()', 'main(  )'));
 
       FormatCommand command = new FormatCommand();
-      CommandRunner runner = createTestCommandRunner(command);
-      int code = await runner.run(<String>['format', srcFile.path]);
-      expect(code, 0);
+      CommandRunner<Null> runner = createTestCommandRunner(command);
+      await runner.run(<String>['format', srcFile.path]);
 
       String formatted = srcFile.readAsStringSync();
       expect(formatted, original);

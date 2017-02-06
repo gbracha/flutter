@@ -4,10 +4,9 @@
 
 import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 // This demo is based on
-// https://www.google.com/design/spec/components/dialogs.html#dialogs-full-screen-dialogs
+// https://material.google.com/components/dialogs.html#dialogs-full-screen-dialogs
 
 enum DismissDialogAction {
   cancel,
@@ -35,7 +34,7 @@ class DateTimeItem extends StatelessWidget {
       style: theme.textTheme.subhead,
       child: new Row(
         children: <Widget>[
-          new Flexible(
+          new Expanded(
             child: new Container(
               padding: const EdgeInsets.symmetric(vertical: 8.0),
               decoration: new BoxDecoration(
@@ -49,7 +48,7 @@ class DateTimeItem extends StatelessWidget {
                     firstDate: date.subtract(const Duration(days: 30)),
                     lastDate: date.add(const Duration(days: 30))
                   )
-                  .then((DateTime value) {
+                  .then<Null>((DateTime value) {
                     onChanged(new DateTime(value.year, value.month, value.day, time.hour, time.minute));
                   });
                 },
@@ -75,7 +74,7 @@ class DateTimeItem extends StatelessWidget {
                   context: context,
                   initialTime: time
                 )
-                .then((TimeOfDay value) {
+                .then<Null>((TimeOfDay value) {
                   onChanged(new DateTime(date.year, date.month, date.day, value.hour, value.minute));
                 });
               },
@@ -113,7 +112,7 @@ class FullScreenDialogDemoState extends State<FullScreenDialogDemo> {
     final ThemeData theme = Theme.of(context);
     final TextStyle dialogTextStyle = theme.textTheme.subhead.copyWith(color: theme.textTheme.caption.color);
 
-    showDialog(
+    showDialog<DismissDialogAction>(
       context: context,
       child: new AlertDialog(
         content: new Text(
@@ -158,7 +157,7 @@ class FullScreenDialogDemoState extends State<FullScreenDialogDemo> {
           )
         ]
       ),
-      body: new Block(
+      body: new ListView(
         padding: const EdgeInsets.all(16.0),
         children: <Widget>[
           new Container(

@@ -28,7 +28,7 @@ class _ContactCategory extends StatelessWidget {
               width: 72.0,
               child: new Icon(icon, color: themeData.primaryColor)
             ),
-            new Flexible(child: new Column(children: children))
+            new Expanded(child: new Column(children: children))
           ]
         )
       )
@@ -53,7 +53,7 @@ class _ContactItem extends StatelessWidget {
     columnChildren.add(new Text(lines.last, style: themeData.textTheme.caption));
 
     List<Widget> rowChildren = <Widget>[
-      new Flexible(
+      new Expanded(
         child: new Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: columnChildren
@@ -99,7 +99,8 @@ class ContactsDemoState extends State<ContactsDemo> {
     return new Theme(
       data: new ThemeData(
         brightness: Brightness.light,
-        primarySwatch: Colors.indigo
+        primarySwatch: Colors.indigo,
+        platform: Theme.of(context).platform,
       ),
       child: new Scaffold(
         key: _scaffoldKey,
@@ -126,11 +127,11 @@ class ContactsDemoState extends State<ContactsDemo> {
               itemBuilder: (BuildContext context) => <PopupMenuItem<AppBarBehavior>>[
                 new PopupMenuItem<AppBarBehavior>(
                   value: AppBarBehavior.scroll,
-                  child: new Text('Toolbar scrolls away')
+                  child: new Text('App bar scrolls away')
                 ),
                 new PopupMenuItem<AppBarBehavior>(
                   value: AppBarBehavior.under,
-                  child: new Text('Toolbar stays put')
+                  child: new Text('App bar stays put')
                 )
               ]
             )

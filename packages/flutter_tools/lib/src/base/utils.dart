@@ -4,19 +4,22 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math' show Random;
 
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as path;
 
+import 'file_system.dart';
+import 'platform.dart';
+
 bool get isRunningOnBot {
   // https://docs.travis-ci.com/user/environment-variables/#Default-Environment-Variables
   // CHROME_HEADLESS is one property set on Flutter's Chrome Infra bots.
   return
-    Platform.environment['TRAVIS'] == 'true' ||
-    Platform.environment['CONTINUOUS_INTEGRATION'] == 'true' ||
-    Platform.environment['CHROME_HEADLESS'] == '1';
+    platform.environment['TRAVIS'] == 'true' ||
+    platform.environment['BOT'] == 'true' ||
+    platform.environment['CONTINUOUS_INTEGRATION'] == 'true' ||
+    platform.environment['CHROME_HEADLESS'] == '1';
 }
 
 String hex(List<int> bytes) {
@@ -63,7 +66,7 @@ File getUniqueFile(Directory dir, String baseName, String ext) {
 
   while (true) {
     String name = '${baseName}_${i.toString().padLeft(2, '0')}.$ext';
-    File file = new File(path.join(dir.path, name));
+    File file = fs.file(path.join(dir.path, name));
     if (!file.existsSync())
       return file;
     i++;
@@ -91,7 +94,7 @@ String getElapsedAsMilliseconds(Duration duration) {
 /// Return a relative path if [fullPath] is contained by the cwd, else return an
 /// absolute path.
 String getDisplayPath(String fullPath) {
-  String cwd = Directory.current.path + Platform.pathSeparator;
+  String cwd = fs.currentDirectory.path + fs.pathSeparator;
   return fullPath.startsWith(cwd) ?  fullPath.substring(cwd.length) : fullPath;
 }
 

@@ -4,9 +4,9 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'constants.dart';
 import 'debug.dart';
@@ -28,8 +28,8 @@ import 'toggleable.dart';
 ///  * [Radio]
 ///  * [Switch]
 ///  * [Slider]
-///  * <https://www.google.com/design/spec/components/selection-controls.html#selection-controls-checkbox>
-///  * <https://www.google.com/design/spec/components/lists-controls.html#lists-controls-types-of-list-controls>
+///  * <https://material.google.com/components/selection-controls.html#selection-controls-checkbox>
+///  * <https://material.google.com/components/lists-controls.html#lists-controls-types-of-list-controls>
 class Checkbox extends StatefulWidget {
   /// Creates a material design checkbox.
   ///
@@ -58,6 +58,21 @@ class Checkbox extends StatefulWidget {
   /// value.
   ///
   /// If null, the checkbox will be displayed as disabled.
+  ///
+  /// The callback provided to onChanged should update the state of the parent
+  /// [StatefulWidget] using the [State.setState] method, so that the parent
+  /// gets rebuilt; for example:
+  ///
+  /// ```dart
+  /// new Checkbox(
+  ///   value: _throwShotAway,
+  ///   onChanged: (bool newValue) {
+  ///     setState(() {
+  ///       _throwShotAway = newValue;
+  ///     });
+  ///   },
+  /// ),
+  /// ```
   final ValueChanged<bool> onChanged;
 
   /// The color to use when this checkbox is checked.
@@ -188,9 +203,9 @@ class _RenderCheckbox extends RenderToggleable {
         ..style = PaintingStyle.stroke
         ..strokeWidth = _kStrokeWidth;
       Path path = new Path();
-      Point start = new Point(_kEdgeSize * 0.15, _kEdgeSize * 0.45);
-      Point mid = new Point(_kEdgeSize * 0.4, _kEdgeSize * 0.7);
-      Point end = new Point(_kEdgeSize * 0.85, _kEdgeSize * 0.25);
+      Point start = const Point(_kEdgeSize * 0.15, _kEdgeSize * 0.45);
+      Point mid = const Point(_kEdgeSize * 0.4, _kEdgeSize * 0.7);
+      Point end = const Point(_kEdgeSize * 0.85, _kEdgeSize * 0.25);
       Point drawStart = Point.lerp(start, mid, 1.0 - value);
       Point drawEnd = Point.lerp(mid, end, value);
       path.moveTo(offsetX + drawStart.x, offsetY + drawStart.y);

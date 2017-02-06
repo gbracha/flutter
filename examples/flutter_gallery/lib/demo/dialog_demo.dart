@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 import 'full_screen_dialog_demo.dart';
 
@@ -30,22 +29,19 @@ class DialogDemoItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return new InkWell(
-      onTap: onPressed,
-      child: new Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 24.0),
-        child: new Row(
-          mainAxisAlignment: MainAxisAlignment.start,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: <Widget>[
-            new Icon(icon, size: 36.0, color: color),
-            new Padding(
-              padding: const EdgeInsets.only(left: 16.0),
-              child: new Text(text)
-            )
-          ]
-        )
-      )
+    return new SimpleDialogOption(
+      onPressed: onPressed,
+      child: new Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          new Icon(icon, size: 36.0, color: color),
+          new Padding(
+            padding: const EdgeInsets.only(left: 16.0),
+            child: new Text(text),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -69,12 +65,12 @@ class DialogDemoState extends State<DialogDemo> {
     _selectedTime = new TimeOfDay(hour: now.hour, minute: now.minute);
   }
 
-  void showDemoDialog/*<T>*/({ BuildContext context, Widget child }) {
-    showDialog/*<T>*/(
+  void showDemoDialog<T>({ BuildContext context, Widget child }) {
+    showDialog<T>(
       context: context,
       child: child
     )
-    .then((dynamic/*=T*/ value) { // The value passed to Navigator.pop() or null.
+    .then<Null>((T value) { // The value passed to Navigator.pop() or null.
       if (value != null) {
         _scaffoldKey.currentState.showSnackBar(new SnackBar(
           content: new Text('You selected: $value')
@@ -93,13 +89,13 @@ class DialogDemoState extends State<DialogDemo> {
       appBar: new AppBar(
         title: new Text('Dialogs')
       ),
-      body: new Block(
+      body: new ListView(
         padding: const EdgeInsets.symmetric(vertical: 24.0, horizontal: 72.0),
         children: <Widget>[
           new RaisedButton(
             child: new Text('ALERT'),
             onPressed: () {
-              showDemoDialog/*<DialogDemoAction>*/(
+              showDemoDialog<DialogDemoAction>(
                 context: context,
                 child: new AlertDialog(
                   content: new Text(
@@ -123,7 +119,7 @@ class DialogDemoState extends State<DialogDemo> {
           new RaisedButton(
             child: new Text('ALERT WITH TITLE'),
             onPressed: () {
-              showDemoDialog/*<DialogDemoAction>*/(
+              showDemoDialog<DialogDemoAction>(
                 context: context,
                 child: new AlertDialog(
                   title: new Text('Use Google\'s location service?'),
@@ -148,7 +144,7 @@ class DialogDemoState extends State<DialogDemo> {
           new RaisedButton(
             child: new Text('SIMPLE'),
             onPressed: () {
-              showDemoDialog/*<String>*/(
+              showDemoDialog<String>(
                 context: context,
                 child: new SimpleDialog(
                   title: new Text('Set backup account'),
@@ -182,8 +178,8 @@ class DialogDemoState extends State<DialogDemo> {
                 context: context,
                 initialTime: _selectedTime
               )
-              .then((TimeOfDay value) {
-                if (value != _selectedTime) {
+              .then<Null>((TimeOfDay value) {
+                if (value != null && value != _selectedTime) {
                   _selectedTime = value;
                   _scaffoldKey.currentState.showSnackBar(new SnackBar(
                     content: new Text('You selected: $value')

@@ -2,11 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'colors.dart';
 import 'constants.dart';
@@ -31,7 +31,7 @@ import 'toggleable.dart';
 ///  * [CheckBox]
 ///  * [Radio]
 ///  * [Slider]
-///  * <https://www.google.com/design/spec/components/selection-controls.html#selection-controls-switch>
+///  * <https://material.google.com/components/selection-controls.html#selection-controls-switch>
 class Switch extends StatefulWidget {
   /// Creates a material design switch.
   ///
@@ -61,6 +61,21 @@ class Switch extends StatefulWidget {
   /// value.
   ///
   /// If null, the switch will be displayed as disabled.
+  ///
+  /// The callback provided to onChanged should update the state of the parent
+  /// [StatefulWidget] using the [State.setState] method, so that the parent
+  /// gets rebuilt; for example:
+  ///
+  /// ```dart
+  /// new Switch(
+  ///   value: _giveVerse,
+  ///   onChanged: (bool newValue) {
+  ///     setState(() {
+  ///       _giveVerse = newValue;
+  ///     });
+  ///   },
+  /// ),
+  /// ```
   final ValueChanged<bool> onChanged;
 
   /// The color to use when this switch is on.
@@ -275,12 +290,12 @@ class _RenderSwitch extends RenderToggleable {
   HorizontalDragGestureRecognizer _drag;
 
   void _handleDragStart(DragStartDetails details) {
-    if (onChanged != null)
+    if (isInteractive)
       reactionController.forward();
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
-    if (onChanged != null) {
+    if (isInteractive) {
       position
         ..curve = null
         ..reverseCurve = null;

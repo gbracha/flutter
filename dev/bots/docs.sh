@@ -2,14 +2,11 @@
 set -e
 
 # Install dartdoc.
-# We peg to this version to work around a bug affecting Flutter in 0.9.7+2.
-pub global activate dartdoc 0.9.7+1
-
-# Generate flutter docs into dev/docs/doc/api/.
-(cd dev/tools; pub get)
+pub global activate dartdoc 0.9.11
 
 # This script generates a unified doc set, and creates
 # a custom index.html, placing everything into dev/docs/doc
+(cd dev/tools; pub get)
 FLUTTER_ROOT=$PWD dart dev/tools/dartdoc.dart
 
 # Ensure google webmaster tools can verify our site.

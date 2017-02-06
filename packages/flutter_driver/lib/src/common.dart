@@ -2,8 +2,11 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:io' show Platform;
+
 import 'package:file/file.dart';
-import 'package:file/io.dart';
+import 'package:file/local.dart';
+import 'package:file/memory.dart';
 
 /// The file system implementation used by this library.
 ///
@@ -20,3 +23,10 @@ void useMemoryFileSystemForTesting() {
 void restoreFileSystem() {
   fs = new LocalFileSystem();
 }
+
+/// Flutter Driver test ouputs directory.
+///
+/// Tests should write any output files to this directory. Defaults to the path
+/// set in the FLUTTER_TEST_OUTPUTS_DIR environment variable, or `build` if
+/// unset.
+String get testOutputsDirectory => Platform.environment['FLUTTER_TEST_OUTPUTS_DIR'] ?? 'build';

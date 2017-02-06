@@ -2,16 +2,17 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:ui' as ui show window;
 import 'dart:ui' show AppLifecycleState, Locale;
 import 'dart:async' show Future;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:meta/meta.dart';
 
 import 'app.dart';
 import 'framework.dart';
@@ -34,7 +35,7 @@ abstract class WidgetsBindingObserver {
   /// box, and false otherwise. The [WidgetsApp] widget uses this
   /// mechanism to notify the [Navigator] widget that it should pop
   /// its current route if possible.
-  bool didPopRoute() => false;
+  Future<bool> didPopRoute() => new Future<bool>.value(false);
 
   /// Called when the application's dimensions change. For example,
   /// when a phone is rotated.
@@ -58,8 +59,8 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
     _instance = this;
     buildOwner.onBuildScheduled = _handleBuildScheduled;
     ui.window.onLocaleChanged = handleLocaleChanged;
-    ui.window.onPopRoute = handlePopRoute;
-    ui.window.onAppLifecycleStateChanged = handleAppLifecycleStateChanged;
+    PlatformMessages.setJSONMessageHandler('flutter/navigation', _handleNavigationMessage);
+    PlatformMessages.setStringMessageHandler('flutter/lifecycle', _handleLifecycleMessage);
   }
 
   /// The current [WidgetsBinding], if one has been created.
@@ -79,19 +80,38 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
 
     registerSignalServiceExtension(
       name: 'debugDumpApp',
-      callback: debugDumpApp
+      callback: () { debugDumpApp(); return debugPrintDone; }
     );
 
     registerBoolServiceExtension(
       name: 'showPerformanceOverlay',
-      getter: () => WidgetsApp.showPerformanceOverlayOverride,
+      getter: () => new Future<bool>.value(WidgetsApp.showPerformanceOverlayOverride),
       setter: (bool value) {
         if (WidgetsApp.showPerformanceOverlayOverride == value)
-          return;
+          return new Future<Null>.value();
         WidgetsApp.showPerformanceOverlayOverride = value;
-        buildOwner.reassemble(renderViewElement);
+        return _forceRebuild();
       }
     );
+
+    registerBoolServiceExtension(
+      name: 'debugAllowBanner',
+      getter: () => new Future<bool>.value(WidgetsApp.debugAllowBannerOverride),
+      setter: (bool value) {
+        if (WidgetsApp.debugAllowBannerOverride == value)
+          return new Future<Null>.value();
+        WidgetsApp.debugAllowBannerOverride = value;
+        return _forceRebuild();
+      }
+    );
+  }
+
+  Future<Null> _forceRebuild() {
+    if (renderViewElement != null) {
+      buildOwner.reassemble(renderViewElement);
+      return endOfFrame;
+    }
+    return new Future<Null>.value();
   }
 
   /// The [BuildOwner] in charge of executing the build pipeline for the
@@ -161,25 +181,40 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
   /// [WidgetsApp] uses this in conjunction with a [Navigator] to
   /// cause the back button to close dialog boxes, return from modal
   /// pages, and so forth.
-  ///
-  /// See [ui.window.onPopRoute].
-  void handlePopRoute() {
-    for (WidgetsBindingObserver observer in _observers) {
-      if (observer.didPopRoute())
+  Future<Null> handlePopRoute() async {
+    for (WidgetsBindingObserver observer in  new List<WidgetsBindingObserver>.from(_observers)) {
+      if (await observer.didPopRoute())
         return;
     }
     SystemNavigator.pop();
+  }
+
+  Future<dynamic> _handleNavigationMessage(Map<String, dynamic> message) async {
+    final String method = message['method'];
+    if (method == 'popRoute')
+      handlePopRoute();
+    // TODO(abarth): Handle 'pushRoute'.
   }
 
   /// Called when the application lifecycle state changes.
   ///
   /// Notifies all the observers using
   /// [WidgetsBindingObserver.didChangeAppLifecycleState].
-  ///
-  /// See [ui.window.onAppLifecycleStateChanged].
   void handleAppLifecycleStateChanged(AppLifecycleState state) {
     for (WidgetsBindingObserver observer in _observers)
       observer.didChangeAppLifecycleState(state);
+  }
+
+  Future<String> _handleLifecycleMessage(String message) async {
+    switch (message) {
+      case 'AppLifecycleState.paused':
+        handleAppLifecycleStateChanged(AppLifecycleState.paused);
+        break;
+      case 'AppLifecycleState.resumed':
+        handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+        break;
+    }
+    return null;
   }
 
   bool _needToReportFirstFrame = true;
@@ -342,12 +377,12 @@ abstract class WidgetsBinding extends BindingBase implements GestureBinding, Ren
   }
 
   @override
-  void reassembleApplication() {
+  Future<Null> reassembleApplication() {
     _needToReportFirstFrame = true;
     preventThisFrameFromBeingReportedAsFirstFrame();
     if (renderViewElement != null)
       buildOwner.reassemble(renderViewElement);
-    super.reassembleApplication();
+    return super.reassembleApplication();
   }
 }
 
@@ -548,7 +583,7 @@ class RenderObjectToWidgetElement<T extends RenderObject> extends RootRenderObje
   }
 
   @override
-  void detachChild(Element child) {
+  void forgetChild(Element child) {
     assert(child == _child);
     _child = null;
   }

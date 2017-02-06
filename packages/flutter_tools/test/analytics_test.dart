@@ -2,14 +2,12 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
-
 import 'package:args/command_runner.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/cache.dart';
 import 'package:flutter_tools/src/commands/create.dart';
 import 'package:flutter_tools/src/commands/config.dart';
 import 'package:flutter_tools/src/commands/doctor.dart';
-import 'package:flutter_tools/src/globals.dart';
 import 'package:flutter_tools/src/usage.dart';
 import 'package:test/test.dart';
 
@@ -19,16 +17,13 @@ import 'src/context.dart';
 void main() {
   group('analytics', () {
     Directory temp;
-    bool wasEnabled;
 
     setUp(() {
       Cache.flutterRoot = '../..';
-      wasEnabled = flutterUsage.enabled;
-      temp = Directory.systemTemp.createTempSync('flutter_tools');
+      temp = fs.systemTempDirectory.createTempSync('flutter_tools');
     });
 
     tearDown(() {
-      flutterUsage.enabled = wasEnabled;
       temp.deleteSync(recursive: true);
     });
 
@@ -39,25 +34,22 @@ void main() {
 
       flutterUsage.enabled = false;
       CreateCommand command = new CreateCommand();
-      CommandRunner runner = createTestCommandRunner(command);
-      int code = await runner.run(<String>['create', '--no-pub', temp.path]);
-      expect(code, 0);
+      CommandRunner<Null> runner = createTestCommandRunner(command);
+      await runner.run(<String>['create', '--no-pub', temp.path]);
       expect(count, 0);
 
       flutterUsage.enabled = true;
-      code = await runner.run(<String>['create', '--no-pub', temp.path]);
-      expect(code, 0);
+      await runner.run(<String>['create', '--no-pub', temp.path]);
       expect(count, flutterUsage.isFirstRun ? 0 : 2);
 
       count = 0;
       flutterUsage.enabled = false;
       DoctorCommand doctorCommand = new DoctorCommand();
       runner = createTestCommandRunner(doctorCommand);
-      code = await runner.run(<String>['doctor']);
-      expect(code, 0);
+      await runner.run(<String>['doctor']);
       expect(count, 0);
-    }, overrides: <Type, dynamic>{
-      Usage: new Usage()
+    }, overrides: <Type, Generator>{
+      Usage: () => new Usage(),
     });
 
     // Ensure we con't send for the 'flutter config' command.
@@ -67,15 +59,15 @@ void main() {
 
       flutterUsage.enabled = false;
       ConfigCommand command = new ConfigCommand();
-      CommandRunner runner = createTestCommandRunner(command);
+      CommandRunner<Null> runner = createTestCommandRunner(command);
       await runner.run(<String>['config']);
       expect(count, 0);
 
       flutterUsage.enabled = true;
       await runner.run(<String>['config']);
       expect(count, 0);
-    }, overrides: <Type, dynamic>{
-      Usage: new Usage()
+    }, overrides: <Type, Generator>{
+      Usage: () => new Usage(),
     });
   });
 
@@ -86,8 +78,11 @@ void main() {
 
       await createTestCommandRunner().run(<String>['--version']);
       expect(count, 0);
-    }, overrides: <Type, dynamic>{
-      Usage: new Usage(settingsName: 'flutter_bot_test', versionOverride: 'dev/unknown')
+    }, overrides: <Type, Generator>{
+      Usage: () => new Usage(
+        settingsName: 'flutter_bot_test',
+        versionOverride: 'dev/unknown',
+      ),
     });
   });
 }

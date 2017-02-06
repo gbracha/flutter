@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 import 'package:flutter/rendering.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'arc.dart';
@@ -33,9 +34,10 @@ const TextStyle _errorTextStyle = const TextStyle(
 ///
 /// See also:
 ///
-///  * [WidgetsApp]
-///  * [Scaffold]
-///  * [MaterialPageRoute]
+///  * [Scaffold], which provides standard app elements like an [AppBar] and a [Drawer].
+///  * [Navigator], which is used to manage the app's stack of pages.
+///  * [MaterialPageRoute], which defines an app page that transitions in a material-specific way.
+///  * [WidgetsApp], which defines the basic app elements but does not depend on the material library.
 class MaterialApp extends StatefulWidget {
 
   /// Creates a MaterialApp.
@@ -55,8 +57,10 @@ class MaterialApp extends StatefulWidget {
     this.initialRoute,
     this.onGenerateRoute,
     this.onLocaleChanged,
+    this.navigatorObservers: const <NavigatorObserver>[],
     this.debugShowMaterialGrid: false,
     this.showPerformanceOverlay: false,
+    this.checkerboardRasterCacheImages: false,
     this.showSemanticsDebugger: false,
     this.debugShowCheckedModeBanner: true
   }) : super(key: key) {
@@ -65,6 +69,7 @@ class MaterialApp extends StatefulWidget {
     assert(!routes.containsKey(Navigator.defaultRouteName) || (home == null));
     assert(routes.containsKey(Navigator.defaultRouteName) || (home != null) || (onGenerateRoute != null));
  }
+
   /// A one-line description of this app for use in the window manager.
   final String title;
 
@@ -128,6 +133,9 @@ class MaterialApp extends StatefulWidget {
   /// https://flutter.io/debugging/#performanceoverlay
   final bool showPerformanceOverlay;
 
+  /// Turns on checkerboarding of raster cache images.
+  final bool checkerboardRasterCacheImages;
+
   /// Turns on an overlay that shows the accessibility information
   /// reported by the framework.
   final bool showSemanticsDebugger;
@@ -147,9 +155,12 @@ class MaterialApp extends StatefulWidget {
   /// representative of what will happen in release mode.
   final bool debugShowCheckedModeBanner;
 
+  /// The list of observers for the [Navigator] created for this app.
+  final List<NavigatorObserver> navigatorObservers;
+
   /// Turns on a [GridPaper] overlay that paints a baseline grid
   /// Material apps:
-  /// https://www.google.com/design/spec/layout/metrics-keylines.html
+  /// https://material.google.com/layout/metrics-keylines.html
   /// Only available in checked mode.
   final bool debugShowMaterialGrid;
 
@@ -207,6 +218,18 @@ class _ScrollLikeMountainViewDelegate extends ScrollConfigurationDelegate {
   bool updateShouldNotify(ScrollConfigurationDelegate old) => false;
 }
 
+class _MaterialScrollBehavior extends ScrollBehavior2 {
+  @override
+  TargetPlatform getPlatform(BuildContext context) {
+    return Theme.of(context).platform;
+  }
+
+  @override
+  Color getGlowColor(BuildContext context) {
+    return Theme.of(context).accentColor;
+  }
+}
+
 class _MaterialAppState extends State<MaterialApp> {
   HeroController _heroController;
 
@@ -259,11 +282,14 @@ class _MaterialAppState extends State<MaterialApp> {
         textStyle: _errorTextStyle,
         // blue[500] is the primary color of the default theme
         color: config.color ?? theme?.primaryColor ?? Colors.blue[500],
-        navigatorObserver: _heroController,
+        navigatorObservers:
+            new List<NavigatorObserver>.from(config.navigatorObservers)
+              ..add(_heroController),
         initialRoute: config.initialRoute,
         onGenerateRoute: _onGenerateRoute,
         onLocaleChanged: config.onLocaleChanged,
         showPerformanceOverlay: config.showPerformanceOverlay,
+        checkerboardRasterCacheImages: config.checkerboardRasterCacheImages,
         showSemanticsDebugger: config.showSemanticsDebugger,
         debugShowCheckedModeBanner: config.debugShowCheckedModeBanner
       )
@@ -282,8 +308,13 @@ class _MaterialAppState extends State<MaterialApp> {
       return true;
     });
 
-    return new ScrollConfiguration(
+    result = new ScrollConfiguration(
       delegate: _getScrollDelegate(theme.platform),
+      child: result
+    );
+
+    return new ScrollConfiguration2(
+      behavior: new _MaterialScrollBehavior(),
       child: result
     );
   }

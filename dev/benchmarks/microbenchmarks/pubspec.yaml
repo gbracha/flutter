@@ -1,9 +1,12 @@
 name: microbenchmarks
-description: A new flutter project.
+description: Small benchmarks for very specific parts of the Flutter framework.
 dependencies:
+  meta: ^1.0.3
   flutter:
     sdk: flutter
   flutter_test:
     sdk: flutter
   stocks:
     path: ../../../examples/stocks
+flutter:
+  uses-material-design: true

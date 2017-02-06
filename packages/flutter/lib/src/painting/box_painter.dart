@@ -5,8 +5,8 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui show Image, Gradient, lerpDouble;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:meta/meta.dart';
 
 import 'basic_types.dart';
 import 'decoration.dart';
@@ -433,7 +433,7 @@ class Border {
         path = new Path();
         path.moveTo(rect.left, rect.bottom);
         path.lineTo(rect.left, rect.top);
-        if (right.width == 0.0) {
+        if (left.width == 0.0) {
           paint.style = PaintingStyle.stroke;
         } else {
           paint.style = PaintingStyle.fill;
@@ -526,13 +526,20 @@ class BoxShadow {
   /// The amount the box should be inflated prior to applying the blur.
   final double spreadRadius;
 
+  /// Converts a blur radius in pixels to sigmas.
+  ///
+  /// See the sigma argument to [MaskFilter.blur].
+  //
+  // See SkBlurMask::ConvertRadiusToSigma().
+  // <https://github.com/google/skia/blob/bb5b77db51d2e149ee66db284903572a5aac09be/src/effects/SkBlurMask.cpp#L23>
+  static double convertRadiusToSigma(double radius) {
+    return radius * 0.57735 + 0.5;
+  }
+
   /// The [blurRadius] in sigmas instead of logical pixels.
   ///
   /// See the sigma argument to [MaskFilter.blur].
-  ///
-  // See SkBlurMask::ConvertRadiusToSigma().
-  // <https://github.com/google/skia/blob/bb5b77db51d2e149ee66db284903572a5aac09be/src/effects/SkBlurMask.cpp#L23>
-  double get blurSigma => blurRadius * 0.57735 + 0.5;
+  double get blurSigma => convertRadiusToSigma(blurRadius);
 
   /// Returns a new box shadow with its offset, blurRadius, and spreadRadius scaled by the given factor.
   BoxShadow scale(double factor) {
@@ -967,7 +974,7 @@ class BackgroundImage {
     this.repeat: ImageRepeat.noRepeat,
     this.centerSlice,
     this.colorFilter,
-    this.alignment
+    this.alignment,
   });
 
   /// The image to be painted into the background.
@@ -999,6 +1006,8 @@ class BackgroundImage {
   /// An alignment of (0.0, 0.0) aligns the image to the top-left corner of its
   /// layout bounds.  An alignment of (1.0, 0.5) aligns the image to the middle
   /// of the right edge of its layout bounds.
+  ///
+  /// Defaults to [FractionalOffset.center].
   final FractionalOffset alignment;
 
   @override
@@ -1024,13 +1033,32 @@ class BackgroundImage {
 }
 
 /// An immutable description of how to paint a box.
+///
+/// The following example uses the [Container] widget from the widgets layer to
+/// draw a background image with a border:
+///
+/// ```dart
+/// new Container(
+///   decoration: new BoxDecoration(
+///     backgroundColor: const Color(0xff7c94b6),
+///     backgroundImage: new BackgroundImage(
+///       image: new ExactAssetImage('images/flowers.jpeg'),
+///       fit: ImageFit.cover,
+///     ),
+///     border: new Border.all(
+///       color: Colors.black,
+///       width: 8.0,
+///     ),
+///   ),
+/// )
+/// ```
 class BoxDecoration extends Decoration {
   /// Creates a box decoration.
   ///
   /// * If [backgroundColor] is null, this decoration does not paint a background color.
   /// * If [backgroundImage] is null, this decoration does not paint a background image.
   /// * If [border] is null, this decoration does not paint a border.
-  /// * If [borderRadius] is null, this decoration use more efficient background
+  /// * If [borderRadius] is null, this decoration uses more efficient background
   ///   painting commands. The [borderRadius] argument must be be null if [shape] is
   ///   [BoxShape.circle].
   /// * If [boxShadow] is null, this decoration does not paint a shadow.
@@ -1058,7 +1086,8 @@ class BoxDecoration extends Decoration {
   /// potentially with a border radius, or a circle).
   final Color backgroundColor;
 
-  /// An image to paint above the background color.
+  /// An image to paint above the background color. If [shape] is [BoxShape.circle]
+  /// then the image is clipped to the circle's boundary.
   final BackgroundImage backgroundImage;
 
   /// A border to draw above the background.
@@ -1170,7 +1199,7 @@ class BoxDecoration extends Decoration {
   /// If the method is passed a non-empty string argument, then the output will
   /// span multiple lines, each prefixed by that argument.
   @override
-  String toString([String prefix = '']) {
+  String toString([String prefix = '', String indentPrefix]) {
     List<String> result = <String>[];
     if (backgroundColor != null)
       result.add('${prefix}backgroundColor: $backgroundColor');
@@ -1180,8 +1209,15 @@ class BoxDecoration extends Decoration {
       result.add('${prefix}border: $border');
     if (borderRadius != null)
       result.add('${prefix}borderRadius: $borderRadius');
-    if (boxShadow != null)
-      result.add('${prefix}boxShadow: ${boxShadow.map((BoxShadow shadow) => shadow.toString())}');
+    if (boxShadow != null) {
+      if (indentPrefix != null && boxShadow.length > 1) {
+        result.add('${prefix}boxShadow:');
+        for (BoxShadow shadow in boxShadow)
+          result.add('$indentPrefix$shadow');
+      } else {
+        result.add('${prefix}boxShadow: ${boxShadow.map((BoxShadow shadow) => shadow.toString()).join(", ")}');
+      }
+    }
     if (gradient != null)
       result.add('${prefix}gradient: $gradient');
     if (shape != BoxShape.rectangle)
@@ -1305,6 +1341,17 @@ class _BoxDecorationPainter extends BoxPainter {
     final ui.Image image = _image?.image;
     if (image == null)
       return;
+
+    Path clipPath;
+    if (_decoration.shape == BoxShape.circle)
+      clipPath = new Path()..addOval(rect);
+    else if (_decoration.borderRadius != null)
+      clipPath = new Path()..addRRect(_decoration.borderRadius.toRRect(rect));
+    if (clipPath != null) {
+      canvas.save();
+      canvas.clipPath(clipPath);
+    }
+
     paintImage(
       canvas: canvas,
       rect: rect,
@@ -1314,6 +1361,9 @@ class _BoxDecorationPainter extends BoxPainter {
       fit: backgroundImage.fit,
       repeat: backgroundImage.repeat
     );
+
+    if (clipPath != null)
+      canvas.restore();
   }
 
   void _imageListener(ImageInfo value, bool synchronousCall) {

@@ -12,12 +12,12 @@ void main() {
     await tester.pumpWidget(
       new Scaffold(
         bottomNavigationBar: new BottomNavigationBar(
-          labels: <DestinationLabel>[
-            new DestinationLabel(
+          items: <BottomNavigationBarItem>[
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.ac_unit),
               title: new Text('AC')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.access_alarm),
               title: new Text('Alarm')
             )
@@ -38,12 +38,12 @@ void main() {
     await tester.pumpWidget(
       new Scaffold(
         bottomNavigationBar: new BottomNavigationBar(
-          labels: <DestinationLabel>[
-            new DestinationLabel(
+          items: <BottomNavigationBarItem>[
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.ac_unit),
               title: new Text('AC')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.access_alarm),
               title: new Text('Alarm')
             )
@@ -63,12 +63,12 @@ void main() {
       new Scaffold(
         bottomNavigationBar: new BottomNavigationBar(
           type: BottomNavigationBarType.shifting,
-          labels: <DestinationLabel>[
-            new DestinationLabel(
+          items: <BottomNavigationBarItem>[
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.ac_unit),
               title: new Text('AC')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.access_alarm),
               title: new Text('Alarm')
             )
@@ -87,12 +87,12 @@ void main() {
         bottomNavigationBar: new BottomNavigationBar(
           currentIndex: 1,
           type: BottomNavigationBarType.shifting,
-          labels: <DestinationLabel>[
-            new DestinationLabel(
+          items: <BottomNavigationBarItem>[
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.ac_unit),
               title: new Text('AC')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.access_alarm),
               title: new Text('Alarm')
             )
@@ -114,20 +114,20 @@ void main() {
       new Scaffold(
         bottomNavigationBar: new BottomNavigationBar(
           type: BottomNavigationBarType.shifting,
-          labels: <DestinationLabel>[
-            new DestinationLabel(
+          items: <BottomNavigationBarItem>[
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.ac_unit),
               title: new Text('AC')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.access_alarm),
               title: new Text('Alarm')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.access_time),
               title: new Text('Time')
             ),
-            new DestinationLabel(
+            new BottomNavigationBarItem(
               icon: new Icon(Icons.add),
               title: new Text('Add')
             )
@@ -164,4 +164,116 @@ void main() {
     actions = tester.renderObjectList(find.byType(InkResponse));
     expect(actions.elementAt(3).localToGlobal(Point.origin), equals(originalOrigin));
   });
+
+  testWidgets('BottomNavigationBar inherits shadowed app theme for shifting navbar', (WidgetTester tester) async {
+    await tester.pumpWidget(
+        new MaterialApp(
+            theme: new ThemeData(brightness: Brightness.light),
+            home: new Theme(
+                data: new ThemeData(brightness: Brightness.dark),
+                child: new Scaffold(
+                    bottomNavigationBar: new BottomNavigationBar(
+                        type: BottomNavigationBarType.shifting,
+                        items: <BottomNavigationBarItem>[
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.ac_unit),
+                              title: new Text('AC')
+                          ),
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.access_alarm),
+                              title: new Text('Alarm')
+                          ),
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.access_time),
+                              title: new Text('Time')
+                          ),
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.add),
+                              title: new Text('Add')
+                          )
+                        ]
+                    )
+                )
+            )
+        )
+    );
+
+    await tester.tap(find.text('Alarm'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(Theme.of(tester.element(find.text('Alarm'))).brightness, equals(Brightness.dark));
+  });
+
+  testWidgets('BottomNavigationBar inherits shadowed app theme for fixed navbar', (WidgetTester tester) async {
+    await tester.pumpWidget(
+        new MaterialApp(
+            theme: new ThemeData(brightness: Brightness.light),
+            home: new Theme(
+                data: new ThemeData(brightness: Brightness.dark),
+                child: new Scaffold(
+                    bottomNavigationBar: new BottomNavigationBar(
+                        type: BottomNavigationBarType.fixed,
+                        items: <BottomNavigationBarItem>[
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.ac_unit),
+                              title: new Text('AC')
+                          ),
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.access_alarm),
+                              title: new Text('Alarm')
+                          ),
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.access_time),
+                              title: new Text('Time')
+                          ),
+                          new BottomNavigationBarItem(
+                              icon: new Icon(Icons.add),
+                              title: new Text('Add')
+                          )
+                        ]
+                    )
+                )
+            )
+        )
+    );
+
+    await tester.tap(find.text('Alarm'));
+    await tester.pump(const Duration(seconds: 1));
+    expect(Theme.of(tester.element(find.text('Alarm'))).brightness, equals(Brightness.dark));
+  });
+
+  testWidgets('BottomNavigationBar iconSize test', (WidgetTester tester) async {
+    double builderIconSize;
+    await tester.pumpWidget(
+      new Scaffold(
+        bottomNavigationBar: new BottomNavigationBar(
+          iconSize: 12.0,
+          items: <BottomNavigationBarItem>[
+            new BottomNavigationBarItem(
+              title: new Text('A'),
+              icon: new Icon(Icons.ac_unit),
+            ),
+            new BottomNavigationBarItem(
+              title: new Text('B'),
+              icon: new Builder(
+                builder: (BuildContext context) {
+                  builderIconSize = IconTheme.of(context).size;
+                  return new SizedBox(
+                    width: builderIconSize,
+                    height: builderIconSize,
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    RenderBox box = tester.renderObject(find.byType(Icon));
+    expect(box.size.width, equals(12.0));
+    expect(box.size.height, equals(12.0));
+    expect(builderIconSize, 12.0);
+  });
+
+
 }

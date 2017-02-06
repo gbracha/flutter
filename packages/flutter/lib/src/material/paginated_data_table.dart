@@ -4,7 +4,7 @@
 
 import 'dart:math' as math;
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter/rendering.dart';
 
@@ -22,8 +22,18 @@ import 'icons.dart';
 import 'progress_indicator.dart';
 import 'theme.dart';
 
-/// A wrapper for [DataTable] that obtains data lazily from a [DataTableSource]
-/// and displays it one page at a time. The widget is presented as a [Card].
+/// A material design data table that shows data using multiple pages.
+///
+/// A paginated data table shows [rowsPerPage] rows of data per page and
+/// provies controls for showing other pages.
+///
+/// Data is read lazily from from a [DataTableSource]. The widget is presented
+/// as a [Card].
+///
+/// See also:
+///
+///  * [DataTable], which is not paginated.
+///  * <https://material.io/guidelines/components/data-tables.html#data-tables-tables-within-cards>
 class PaginatedDataTable extends StatefulWidget {
   /// Creates a widget describing a paginated [DataTable] on a [Card].
   ///
@@ -69,13 +79,16 @@ class PaginatedDataTable extends StatefulWidget {
   }) : super(key: key) {
     assert(header != null);
     assert(columns != null);
-    assert(columns.length > 0);
+    assert(columns.isNotEmpty);
     assert(sortColumnIndex == null || (sortColumnIndex >= 0 && sortColumnIndex < columns.length));
     assert(sortAscending != null);
     assert(rowsPerPage != null);
     assert(rowsPerPage > 0);
-    assert(availableRowsPerPage != null);
-    assert(availableRowsPerPage.contains(rowsPerPage));
+    assert(() {
+      if (onRowsPerPageChanged != null)
+        assert(availableRowsPerPage != null && availableRowsPerPage.contains(rowsPerPage));
+      return true;
+    });
     assert(source != null);
   }
 
@@ -221,13 +234,13 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
   DataRow _getBlankRowFor(int index) {
     return new DataRow.byIndex(
       index: index,
-      cells: config.columns.map/*<DataCell>*/((DataColumn column) => DataCell.empty).toList()
+      cells: config.columns.map<DataCell>((DataColumn column) => DataCell.empty).toList()
     );
   }
 
   DataRow _getProgressIndicatorRowFor(int index) {
     bool haveProgressIndicator = false;
-    final List<DataCell> cells = config.columns.map/*<DataCell>*/((DataColumn column) {
+    final List<DataCell> cells = config.columns.map<DataCell>((DataColumn column) {
       if (!column.numeric) {
         haveProgressIndicator = true;
         return new DataCell(new CircularProgressIndicator());
@@ -273,7 +286,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
     final List<Widget> headerWidgets = <Widget>[];
     double leftPadding = 24.0;
     if (_selectedRowCount == 0) {
-      headerWidgets.add(new Flexible(child: config.header));
+      headerWidgets.add(new Expanded(child: config.header));
       if (config.header is ButtonBar) {
         // We adjust the padding when a button bar is present, because the
         // ButtonBar introduces 2 pixels of outside padding, plus 2 pixels
@@ -285,16 +298,16 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
       }
     } else if (_selectedRowCount == 1) {
       // TODO(ianh): Real l10n.
-      headerWidgets.add(new Flexible(child: new Text('1 item selected')));
+      headerWidgets.add(new Expanded(child: new Text('1 item selected')));
     } else {
-      headerWidgets.add(new Flexible(child: new Text('$_selectedRowCount items selected')));
+      headerWidgets.add(new Expanded(child: new Text('$_selectedRowCount items selected')));
     }
     if (config.actions != null) {
       headerWidgets.addAll(
-        config.actions.map/*<Widget>*/((Widget widget) {
+        config.actions.map<Widget>((Widget widget) {
           return new Padding(
             // 8.0 is the default padding of an icon button
-            padding: new EdgeInsets.only(left: 24.0 - 8.0 * 2.0),
+            padding: const EdgeInsets.only(left: 24.0 - 8.0 * 2.0),
             child: widget
           );
         }).toList()
@@ -307,7 +320,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
     if (config.onRowsPerPageChanged != null) {
       List<Widget> availableRowsPerPage = config.availableRowsPerPage
         .where((int value) => value <= _rowCount)
-        .map/*<DropdownMenuItem<int>>*/((int value) {
+        .map<DropdownMenuItem<int>>((int value) {
           return new DropdownMenuItem<int>(
             value: value,
             child: new Text('$value')
@@ -336,6 +349,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
       new IconButton(
         icon: new Icon(Icons.chevron_left),
         padding: EdgeInsets.zero,
+        tooltip: 'Previous page',
         onPressed: _firstRowIndex <= 0 ? null : () {
           pageTo(math.max(_firstRowIndex - config.rowsPerPage, 0));
         }
@@ -344,6 +358,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
       new IconButton(
         icon: new Icon(Icons.chevron_right),
         padding: EdgeInsets.zero,
+        tooltip: 'Next page',
         onPressed: (!_rowCountApproximate && (_firstRowIndex + config.rowsPerPage >= _rowCount)) ? null : () {
           pageTo(_firstRowIndex + config.rowsPerPage);
         }
@@ -353,17 +368,18 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
 
     // CARD
     return new Card(
-      child: new BlockBody(
+      child: new Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           new DefaultTextStyle(
             // These typographic styles aren't quite the regular ones. We pick the closest ones from the regular
             // list and then tweak them appropriately.
-            // See https://www.google.com/design/spec/components/data-tables.html#data-tables-tables-within-cards
+            // See https://material.google.com/components/data-tables.html#data-tables-tables-within-cards
             style: _selectedRowCount > 0 ? themeData.textTheme.subhead.copyWith(color: themeData.accentColor)
                                          : themeData.textTheme.title.copyWith(fontWeight: FontWeight.w400),
             child: new IconTheme.merge(
               context: context,
-              data: new IconThemeData(
+              data: const IconThemeData(
                 opacity: 0.54
               ),
               child: new ButtonTheme.bar(
@@ -384,7 +400,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
               )
             )
           ),
-          new ScrollableViewport(
+          new SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: new DataTable(
               key: _tableKey,
@@ -399,7 +415,7 @@ class PaginatedDataTableState extends State<PaginatedDataTable> {
             style: footerTextStyle,
             child: new IconTheme.merge(
               context: context,
-              data: new IconThemeData(
+              data: const IconThemeData(
                 opacity: 0.54
               ),
               child: new Container(

@@ -28,10 +28,12 @@ const Duration _kIndicatorSnapDuration = const Duration(milliseconds: 150);
 // has completed.
 const Duration _kIndicatorScaleDuration = const Duration(milliseconds: 200);
 
-/// The signature for a function that's called when the user has dragged the
-/// refresh indicator far enough to demonstrate that they want the app to
-/// refresh. The returned Future must complete when the refresh operation
-/// is finished.
+/// The signature for a function that's called when the user has dragged a
+/// [RefreshIndicator] far enough to demonstrate that they want the app to
+/// refresh. The returned [Future] must complete when the refresh operation is
+/// finished.
+///
+/// Used by [RefreshIndicator.refresh].
 typedef Future<Null> RefreshCallback();
 
 /// Where the refresh indicator appears: top for over-scrolls at the
@@ -79,7 +81,7 @@ enum _DismissTransition {
 ///
 /// See also:
 ///
-///  * <https://www.google.com/design/spec/patterns/swipe-to-refresh.html>
+///  * <https://material.google.com/patterns/swipe-to-refresh.html>
 ///  * [RefreshIndicatorState], can be used to programatically show the refresh indicator.
 ///  * [RefreshProgressIndicator].
 class RefreshIndicator extends StatefulWidget {
@@ -117,7 +119,7 @@ class RefreshIndicator extends StatefulWidget {
 
   /// A function that's called when the user has dragged the refresh indicator
   /// far enough to demonstrate that they want the app to refresh. The returned
-  /// Future must complete when the refresh operation is finished.
+  /// [Future] must complete when the refresh operation is finished.
   final RefreshCallback refresh;
 
   /// Where the refresh indicator should appear, [RefreshIndicatorLocation.top]
@@ -355,7 +357,7 @@ class RefreshIndicatorState extends State<RefreshIndicator> with TickerProviderS
     )
     .animate(new CurvedAnimation(
       parent: _sizeController,
-      curve: new Interval(0.0, 1.0 / _kDragSizeFactorLimit)
+      curve: const Interval(0.0, 1.0 / _kDragSizeFactorLimit)
     ));
 
     return new Listener(

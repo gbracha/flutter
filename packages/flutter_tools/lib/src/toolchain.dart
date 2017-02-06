@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
-
 import 'package:path/path.dart' as path;
 
 import 'base/context.dart';
+import 'base/file_system.dart';
 import 'build_info.dart';
 import 'cache.dart';
 import 'globals.dart';
@@ -25,18 +24,11 @@ const Map<HostTool, String> _kHostToolFileName = const <HostTool, String>{
 /// and the engine artifact directory for a given target platform. It is configurable
 /// via command-line arguments in order to support local engine builds.
 class ToolConfiguration {
-  /// [overrideCache] is configurable for testing.
-  ToolConfiguration({ Cache overrideCache }) {
-    _cache = overrideCache ?? cache;
-  }
+  ToolConfiguration();
 
-  Cache _cache;
+  Cache get cache => context[Cache];
 
-  static ToolConfiguration get instance {
-    if (context[ToolConfiguration] == null)
-      context[ToolConfiguration] = new ToolConfiguration();
-    return context[ToolConfiguration];
-  }
+  static ToolConfiguration get instance => context[ToolConfiguration];
 
   /// Override using the artifacts from the cache directory (--engine-src-path).
   String engineSrcPath;
@@ -57,27 +49,27 @@ class ToolConfiguration {
 
   Directory _getEngineArtifactsDirectory(TargetPlatform platform, BuildMode mode) {
     if (engineBuildPath != null) {
-      return new Directory(engineBuildPath);
+      return fs.directory(engineBuildPath);
     } else {
       String suffix = mode != BuildMode.debug ? '-${getModeName(mode)}' : '';
 
       // Create something like `android-arm` or `android-arm-release`.
       String dirName = getNameForTargetPlatform(platform) + suffix;
-      Directory engineDir = _cache.getArtifactDirectory('engine');
-      return new Directory(path.join(engineDir.path, dirName));
+      Directory engineDir = cache.getArtifactDirectory('engine');
+      return fs.directory(path.join(engineDir.path, dirName));
     }
   }
 
   String getHostToolPath(HostTool tool) {
     if (engineBuildPath == null) {
-      return path.join(_cache.getArtifactDirectory('engine').path,
+      return path.join(cache.getArtifactDirectory('engine').path,
                        getNameForHostPlatform(getCurrentHostPlatform()),
                        _kHostToolFileName[tool]);
     }
 
     if (tool == HostTool.SkySnapshot) {
       String clangPath = path.join(engineBuildPath, 'clang_x64', 'sky_snapshot');
-      if (FileSystemEntity.isFileSync(clangPath))
+      if (fs.isFileSync(clangPath))
         return clangPath;
       return path.join(engineBuildPath, 'sky_snapshot');
     } else if (tool == HostTool.SkyShell) {

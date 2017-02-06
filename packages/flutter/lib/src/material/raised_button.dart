@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'button.dart';
 import 'colors.dart';
@@ -18,11 +18,10 @@ import 'theme.dart';
 /// in long busy lists of content, or in wide spaces. Avoid using raised buttons
 /// on already-raised content such as dialogs or cards.
 ///
-/// If the [onPressed] callback is not specified or null, then the button will
-/// be disabled and by default will appear like a flat button in the
-/// [disabledColor]. If you are trying to change the button's [color] and it is
-/// not having any effect, check that you are passing a non-null [onPressed]
-/// handler.
+/// If the [onPressed] callback is null, then the button will be disabled and by
+/// default will appear like a flat button in the [disabledColor]. If you are
+/// trying to change the button's [color] and it is not having any effect, check
+/// that you are passing a non-null [onPressed] handler.
 ///
 /// Requires one of its ancestors to be a [Material] widget.
 ///
@@ -31,7 +30,7 @@ import 'theme.dart';
 ///  * [FlatButton]
 ///  * [DropdownButton]
 ///  * [FloatingActionButton]
-///  * <https://www.google.com/design/spec/components/buttons.html>
+///  * <https://material.google.com/components/buttons.html>
 class RaisedButton extends StatelessWidget {
   /// Creates a raised button.
   ///
@@ -56,6 +55,14 @@ class RaisedButton extends StatelessWidget {
 
   /// The color of the button, as printed on the [Material]. Defaults to null,
   /// meaning that the color is automatically derived from the [Theme].
+  ///
+  /// ```dart
+  ///  new RaisedButton(
+  ///    color: Colors.blue[500],
+  ///    onPressed: _handleTap,
+  ///    child: new Text('DEMO'),
+  ///  ),
+  /// ```
   final Color color;
 
   /// The color of the button when the button is disabled. Buttons are disabled
@@ -66,16 +73,23 @@ class RaisedButton extends StatelessWidget {
   /// The z-coordinate at which to place this button.
   ///
   /// The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9, 12, 16, 24
+  ///
+  /// Defaults to 2, the appropriate elevation for raised buttons.
   final int elevation;
 
   /// The z-coordinate at which to place this button when highlighted.
   ///
   /// The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9, 12, 16, 24
+  ///
+  /// Defaults to 8, the appropriate elevation for raised buttons while they are
+  /// being touched.
   final int highlightElevation;
 
   /// The z-coordinate at which to place this button when disabled.
   ///
   /// The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9, 12, 16, 24
+  ///
+  /// Defaults to 0, the appropriate elevation for disabled raised buttons.
   final int disabledElevation;
 
   /// The theme brightness to use for this button.
@@ -99,13 +113,13 @@ class RaisedButton extends StatelessWidget {
       if (disabledColor != null)
         return disabledColor;
       Brightness brightness = Theme.of(context).brightness;
+      assert(brightness != null);
       switch (brightness) {
         case Brightness.light:
           return Colors.black12;
         case Brightness.dark:
           return Colors.white12;
       }
-      assert(brightness != null);
       return null;
     }
   }
@@ -118,7 +132,7 @@ class RaisedButton extends StatelessWidget {
       elevation: enabled ? elevation : disabledElevation,
       highlightElevation: enabled ? highlightElevation : disabledElevation,
       colorBrightness: colorBrightness,
-      child: child
+      child: child,
     );
   }
 }

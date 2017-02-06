@@ -3,9 +3,9 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:args/command_runner.dart';
+import 'package:flutter_tools/src/base/file_system.dart';
 import 'package:flutter_tools/src/commands/create.dart';
 import 'package:flutter_tools/src/commands/packages.dart';
 import 'package:test/test.dart';
@@ -18,7 +18,7 @@ void main() {
     Directory temp;
 
     setUp(() {
-      temp = Directory.systemTemp.createTempSync('flutter_tools');
+      temp = fs.systemTempDirectory.createTempSync('flutter_tools');
     });
 
     tearDown(() {
@@ -27,24 +27,22 @@ void main() {
 
     Future<Null> createProject() async {
       CreateCommand command = new CreateCommand();
-      CommandRunner runner = createTestCommandRunner(command);
+      CommandRunner<Null> runner = createTestCommandRunner(command);
 
-      int code = await runner.run(<String>['create', '--no-pub', temp.path]);
-      expect(code, 0);
+      await runner.run(<String>['create', '--no-pub', temp.path]);
     }
 
     Future<Null> runCommand(String verb) async {
       await createProject();
 
       PackagesCommand command = new PackagesCommand();
-      CommandRunner runner = createTestCommandRunner(command);
+      CommandRunner<Null> runner = createTestCommandRunner(command);
 
-      int code = await runner.run(<String>['packages', verb, temp.path]);
-      expect(code, 0);
+      await runner.run(<String>['packages', verb, temp.path]);
     }
 
     void expectExists(String relPath) {
-      expect(FileSystemEntity.isFileSync('${temp.path}/$relPath'), true);
+      expect(fs.isFileSync('${temp.path}/$relPath'), true);
     }
 
     // Verify that we create a project that is well-formed.

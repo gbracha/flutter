@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
-
 import 'package:path/path.dart' as path;
 
+import 'base/context.dart';
+import 'base/platform.dart';
 import 'base/utils.dart';
 import 'globals.dart';
 
@@ -45,6 +45,7 @@ bool isEmulatorBuildMode(BuildMode mode) => mode == BuildMode.debug;
 enum HostPlatform {
   darwin_x64,
   linux_x64,
+  windows_x64,
 }
 
 String getNameForHostPlatform(HostPlatform platform) {
@@ -53,6 +54,8 @@ String getNameForHostPlatform(HostPlatform platform) {
       return 'darwin-x64';
     case HostPlatform.linux_x64:
       return 'linux-x64';
+    case HostPlatform.windows_x64:
+      return 'windows-x64';
   }
   assert(false);
   return null;
@@ -106,10 +109,12 @@ TargetPlatform getTargetPlatformForName(String platform) {
 }
 
 HostPlatform getCurrentHostPlatform() {
-  if (Platform.isMacOS)
+  if (platform.isMacOS)
     return HostPlatform.darwin_x64;
-  if (Platform.isLinux)
+  if (platform.isLinux)
     return HostPlatform.linux_x64;
+  if (platform.isWindows)
+    return HostPlatform.windows_x64;
 
   printError('Unsupported host platform, defaulting to Linux');
 
@@ -118,6 +123,11 @@ HostPlatform getCurrentHostPlatform() {
 
 /// Returns the top-level build output directory.
 String getBuildDirectory() {
+  // TODO(johnmccutchan): Stop calling this function as part of setting
+  // up command line argument processing.
+  if (context == null || config == null)
+    return 'build';
+
   String buildDir = config.getValue('build-dir') ?? 'build';
   if (path.isAbsolute(buildDir)) {
     throw new Exception(

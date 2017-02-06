@@ -6,7 +6,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'animation_tester.dart';
+class BogusCurve extends Curve {
+  @override
+  double transform(double t) => 100.0;
+}
 
 void main() {
   setUp(() {
@@ -15,16 +18,16 @@ void main() {
   });
 
   test('toString control test', () {
-    expect(kAlwaysCompleteAnimation.toString(), hasOneLineDescription);
-    expect(kAlwaysDismissedAnimation.toString(), hasOneLineDescription);
-    expect(new AlwaysStoppedAnimation<double>(0.5).toString(), hasOneLineDescription);
+    expect(kAlwaysCompleteAnimation, hasOneLineDescription);
+    expect(kAlwaysDismissedAnimation, hasOneLineDescription);
+    expect(const AlwaysStoppedAnimation<double>(0.5), hasOneLineDescription);
     CurvedAnimation curvedAnimation = new CurvedAnimation(
       parent: kAlwaysDismissedAnimation,
       curve: Curves.ease
     );
-    expect(curvedAnimation.toString(), hasOneLineDescription);
+    expect(curvedAnimation, hasOneLineDescription);
     curvedAnimation.reverseCurve = Curves.elasticOut;
-    expect(curvedAnimation.toString(), hasOneLineDescription);
+    expect(curvedAnimation, hasOneLineDescription);
     AnimationController controller = new AnimationController(
       duration: const Duration(milliseconds: 500),
       vsync: const TestVSync(),
@@ -37,7 +40,7 @@ void main() {
       curve: Curves.ease,
       reverseCurve: Curves.elasticOut
     );
-    expect(curvedAnimation.toString(), hasOneLineDescription);
+    expect(curvedAnimation, hasOneLineDescription);
     controller.stop();
   });
 
@@ -45,9 +48,9 @@ void main() {
     ProxyAnimation animation = new ProxyAnimation();
     expect(animation.value, 0.0);
     expect(animation.status, AnimationStatus.dismissed);
-    expect(animation.toString(), hasOneLineDescription);
+    expect(animation, hasOneLineDescription);
     animation.parent = kAlwaysDismissedAnimation;
-    expect(animation.toString(), hasOneLineDescription);
+    expect(animation, hasOneLineDescription);
   });
 
   test('ProxyAnimation set parent generates value changed', () {
@@ -88,7 +91,7 @@ void main() {
     expect(didReceiveCallback, isFalse);
     controller.value = 0.7;
     expect(didReceiveCallback, isFalse);
-    expect(animation.toString(), hasOneLineDescription);
+    expect(animation, hasOneLineDescription);
   });
 
   test('TrainHoppingAnimation', () {
@@ -107,11 +110,55 @@ void main() {
       });
     expect(didSwitchTrains, isFalse);
     expect(animation.value, 0.5);
-    expect(animation.toString(), hasOneLineDescription);
+    expect(animation, hasOneLineDescription);
     nextTrain.value = 0.25;
     expect(didSwitchTrains, isTrue);
     expect(animation.value, 0.25);
-    expect(animation.toString(), hasOneLineDescription);
+    expect(animation, hasOneLineDescription);
     expect(animation.toString(), contains('no next'));
+  });
+
+  test('AnimationMean control test', () {
+    AnimationController left = new AnimationController(
+      value: 0.5,
+      vsync: const TestVSync(),
+    );
+    AnimationController right = new AnimationController(
+      vsync: const TestVSync(),
+    );
+
+    AnimationMean mean = new AnimationMean(left: left, right: right);
+
+    expect(mean, hasOneLineDescription);
+    expect(mean.value, equals(0.25));
+
+    List<double> log = <double>[];
+    void logValue() {
+      log.add(mean.value);
+    }
+
+    mean.addListener(logValue);
+
+    right.value = 1.0;
+
+    expect(mean.value, equals(0.75));
+    expect(log, equals(<double>[0.75]));
+    log.clear();
+
+    mean.removeListener(logValue);
+
+    left.value = 0.0;
+
+    expect(mean.value, equals(0.50));
+    expect(log, isEmpty);
+  });
+
+  test('CurvedAnimation with bogus curve', () {
+    AnimationController controller = new AnimationController(
+      vsync: const TestVSync(),
+    );
+    CurvedAnimation curved = new CurvedAnimation(parent: controller, curve: new BogusCurve());
+
+    expect(() { curved.value; }, throwsFlutterError);
   });
 }

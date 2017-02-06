@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
-import 'package:meta/meta.dart';
 
 import 'basic.dart';
 import 'binding.dart';
@@ -13,9 +13,13 @@ import 'framework.dart';
 import 'overlay.dart';
 
 /// Signature for determining whether the given data will be accepted by a [DragTarget].
+///
+/// Used by [DragTarget.onWillAccept].
 typedef bool DragTargetWillAccept<T>(T data);
 
 /// Signature for causing a [DragTarget] to accept the given data.
+///
+/// Used by [DragTarget.onAccept].
 typedef void DragTargetAccept<T>(T data);
 
 /// Signature for building children of a [DragTarget].
@@ -24,9 +28,13 @@ typedef void DragTargetAccept<T>(T data);
 /// over this [DragTarget] and that has passed [DragTarget.onWillAccept]. The
 /// `rejectedData` argument contains the list of drag data that is hovering over
 /// this [DragTarget] and that will not be accepted by the [DragTarget].
+///
+/// Used by [DragTarget.builder].
 typedef Widget DragTargetBuilder<T>(BuildContext context, List<T> candidateData, List<dynamic> rejectedData);
 
 /// Signature for when a [Draggable] is dropped without being accepted by a [DragTarget].
+///
+/// Used by [Draggable.onDraggableCanceled].
 typedef void DraggableCanceledCallback(Velocity velocity, Offset offset);
 
 /// Where the [Draggable] should be anchored during a drag.
@@ -54,7 +62,17 @@ enum DragAnchor {
 /// When a draggable widget recognizes the start of a drag gesture, it displays
 /// a [feedback] widget that tracks the user's finger across the screen. If the
 /// user lifts their finger while on top of a [DragTarget], that target is given
-/// the opportunity to accept the [data] carried by the draggble.
+/// the opportunity to accept the [data] carried by the draggable.
+///
+/// On multitouch devices, multiple drags can occur simultaneously because there
+/// can be multiple pointers in contact with the device at once. To limit the
+/// number of simultaneous drags, use the [maxSimultaneousDrags] property. The
+/// default is to allow an unlimited number of simultaneous drags.
+///
+/// This widget displays [child] when zero drags are under way. If
+/// [childWhenDragging] is non-null, this widget instead displays
+/// [childWhenDragging] when one or more drags are underway. Otherwise, this
+/// widget always displays [child].
 ///
 /// See also:
 ///
@@ -87,16 +105,34 @@ class Draggable<T> extends StatefulWidget {
   final T data;
 
   /// The widget below this widget in the tree.
+  ///
+  /// This widget displays [child] when zero drags are under way. If
+  /// [childWhenDragging] is non-null, this widget instead displays
+  /// [childWhenDragging] when one or more drags are underway. Otherwise, this
+  /// widget always displays [child].
+  ///
+  /// The [feedback] widget is shown under the pointer when a drag is under way.
+  ///
+  /// To limit the number of simultaneous drags on multitouch devices, see
+  /// [maxSimultaneousDrags].
   final Widget child;
 
-  /// The widget to show instead of [child] when a drag is under way.
+  /// The widget to display instead of [child] when one or more drags are under way.
   ///
-  /// If this is null, then [child] will be used instead (and so the
-  /// drag source representation will change while a drag is under
+  /// If this is null, then this widget will always display [child] (and so the
+  /// drag source representation will not change while a drag is under
   /// way).
+  ///
+  /// The [feedback] widget is shown under the pointer when a drag is under way.
+  ///
+  /// To limit the number of simultaneous drags on multitouch devices, see
+  /// [maxSimultaneousDrags].
   final Widget childWhenDragging;
 
   /// The widget to show under the pointer when a drag is under way.
+  ///
+  /// See [child] and [childWhenDragging] for information about what is shown
+  /// at the location of the [Draggable] itself when a drag is under way.
   final Widget feedback;
 
   /// The feedbackOffset can be used to set the hit test target point for the
@@ -128,6 +164,9 @@ class Draggable<T> extends StatefulWidget {
   /// When null, no limit is applied. Set this to 1 if you want to only allow
   /// the drag source to have one item dragged at a time. Set this to 0 if you
   /// want to prevent the draggable from actually being dragged.
+  ///
+  /// If you set this property to 1, consider supplying an "empty" widget for
+  /// [childWhenDragging] to create the illusion of actually moving [child].
   final int maxSimultaneousDrags;
 
   /// Called when the draggable starts being dragged.
@@ -259,7 +298,7 @@ class _DraggableState<T> extends State<Draggable<T>> {
       _activeCount += 1;
     });
     final _DragAvatar<T> avatar = new _DragAvatar<T>(
-      overlay: Overlay.of(context, debugRequiredFor: config),
+      overlayState: Overlay.of(context, debugRequiredFor: config),
       data: config.data,
       initialPosition: position,
       dragStartPoint: dragStartPoint,
@@ -336,8 +375,8 @@ class DragTarget<T> extends StatefulWidget {
   _DragTargetState<T> createState() => new _DragTargetState<T>();
 }
 
-List/*<T>*/ _mapAvatarsToData/*<T>*/(List/*<_DragAvatar<T>>*/ avatars) {
-  return avatars.map/*<T>*/((_DragAvatar/*<T>*/ avatar) => avatar.data).toList();
+List<T> _mapAvatarsToData<T>(List<_DragAvatar<T>> avatars) {
+  return avatars.map<T>((_DragAvatar<T> avatar) => avatar.data).toList();
 }
 
 class _DragTargetState<T> extends State<DragTarget<T>> {
@@ -384,7 +423,7 @@ class _DragTargetState<T> extends State<DragTarget<T>> {
     return new MetaData(
       metaData: this,
       behavior: HitTestBehavior.translucent,
-      child: config.builder(context, _mapAvatarsToData/*<T>*/(_candidateAvatars), _mapAvatarsToData(_rejectedAvatars))
+      child: config.builder(context, _mapAvatarsToData<T>(_candidateAvatars), _mapAvatarsToData<dynamic>(_rejectedAvatars))
     );
   }
 }
@@ -398,7 +437,7 @@ typedef void _OnDragEnd(Velocity velocity, Offset offset, bool wasAccepted);
 // eeding this object pointer events even after it has been disposed.
 class _DragAvatar<T> extends Drag {
   _DragAvatar({
-    OverlayState overlay,
+    this.overlayState,
     this.data,
     Point initialPosition,
     this.dragStartPoint: Point.origin,
@@ -406,11 +445,11 @@ class _DragAvatar<T> extends Drag {
     this.feedbackOffset: Offset.zero,
     this.onDragEnd
   }) {
-    assert(overlay != null);
+    assert(overlayState != null);
     assert(dragStartPoint != null);
     assert(feedbackOffset != null);
     _entry = new OverlayEntry(builder: _build);
-    overlay.insert(_entry);
+    overlayState.insert(_entry);
     _position = initialPosition;
     updateDrag(initialPosition);
   }
@@ -420,6 +459,7 @@ class _DragAvatar<T> extends Drag {
   final Widget feedback;
   final Offset feedbackOffset;
   final _OnDragEnd onDragEnd;
+  final OverlayState overlayState;
 
   _DragTargetState<T> _activeTarget;
   List<_DragTargetState<T>> _enteredTargets = <_DragTargetState<T>>[];
@@ -517,9 +557,11 @@ class _DragAvatar<T> extends Drag {
   }
 
   Widget _build(BuildContext context) {
+    RenderBox box = overlayState.context.findRenderObject();
+    Point overlayTopLeft = box.localToGlobal(Point.origin);
     return new Positioned(
-      left: _lastOffset.dx,
-      top: _lastOffset.dy,
+      left: _lastOffset.dx - overlayTopLeft.x,
+      top: _lastOffset.dy - overlayTopLeft.y,
       child: new IgnorePointer(
         child: feedback
       )

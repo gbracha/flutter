@@ -37,7 +37,7 @@ class AdaptedGridItem extends StatelessWidget {
     return new Card(
       child: new Column(
         children: <Widget>[
-          new Flexible(
+          new Expanded(
             child: new Container(
               decoration: new BoxDecoration(
                 backgroundColor: Colors.lightBlueAccent[100]
@@ -48,7 +48,7 @@ class AdaptedGridItem extends StatelessWidget {
             margin: const EdgeInsets.only(left: 8.0),
             child: new Row(
               children: <Widget>[
-                new Flexible(
+                new Expanded(
                   child: new Text(name)
                 ),
                 new IconButton(
@@ -76,14 +76,14 @@ class AdaptiveContainer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (MediaQuery.of(context).size.width < _kGridViewBreakpoint) {
-      return new ScrollableList(
+      return new ListView(
         itemExtent: _kListItemExtent,
-        children: names.map((String name) => new AdaptedListItem(name: name))
+        children: names.map((String name) => new AdaptedListItem(name: name)).toList(),
       );
     } else {
-      return new ScrollableGrid(
-        delegate: new MaxTileWidthGridDelegate(maxTileWidth: _kMaxTileWidth),
-        children: names.map((String name) => new AdaptedGridItem(name: name))
+      return new GridView.extent(
+        maxCrossAxisExtent: _kMaxTileWidth,
+        children: names.map((String name) => new AdaptedGridItem(name: name)).toList(),
       );
     }
   }

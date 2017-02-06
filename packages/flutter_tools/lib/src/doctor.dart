@@ -3,19 +3,22 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:convert' show JSON;
-import 'dart:io';
+import 'dart:convert' show UTF8;
 
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as path;
 
 import 'android/android_workflow.dart';
 import 'base/common.dart';
 import 'base/context.dart';
-import 'base/os.dart';
+import 'base/file_system.dart';
+import 'base/platform.dart';
 import 'device.dart';
 import 'globals.dart';
 import 'ios/ios_workflow.dart';
 import 'version.dart';
+
+Doctor get doctor => context[Doctor];
 
 const Map<String, String> _osNames = const <String, String>{
   'macos': 'Mac OS',
@@ -24,7 +27,7 @@ const Map<String, String> _osNames = const <String, String>{
 };
 
 String osName() {
-  String os = Platform.operatingSystem;
+  String os = platform.operatingSystem;
   return _osNames.containsKey(os) ? _osNames[os] : os;
 }
 
@@ -41,18 +44,13 @@ class Doctor {
       _validators.add(_iosWorkflow);
 
     List<DoctorValidator> ideValidators = <DoctorValidator>[];
-    ideValidators.addAll(AtomValidator.installed);
-    ideValidators.addAll(IntelliJValidator.installed);
+    ideValidators.addAll(IntelliJValidator.installedValidators);
     if (ideValidators.isNotEmpty)
       _validators.addAll(ideValidators);
     else
       _validators.add(new NoIdeValidator());
 
     _validators.add(new DeviceValidator());
-  }
-
-  static void initGlobal() {
-    context[Doctor] = new Doctor();
   }
 
   IOSWorkflow _iosWorkflow;
@@ -126,14 +124,12 @@ class Doctor {
       else
         printStatus('${result.leadingBox} ${validator.title}');
 
-      final String separator = Platform.isWindows ? ' ' : '•';
-
       for (ValidationMessage message in result.messages) {
         String text = message.message.replaceAll('\n', '\n      ');
         if (message.isError) {
           printStatus('    x $text', emphasis: true);
         } else {
-          printStatus('    $separator $text');
+          printStatus('    • $text');
         }
       }
     }
@@ -182,9 +178,9 @@ class ValidationResult {
 
   String get leadingBox {
     if (type == ValidationType.missing)
-      return '[x]';
+      return '[✗]';
     else if (type == ValidationType.installed)
-      return Platform.isWindows ? '[+]' : '[✓]';
+      return '[✓]';
     else
       return '[-]';
   }
@@ -219,7 +215,7 @@ class _FlutterValidator extends DoctorValidator {
     messages.add(new ValidationMessage('Engine revision ${version.engineRevisionShort}'));
     messages.add(new ValidationMessage('Tools Dart version ${version.dartSdkVersion}'));
 
-    if (Platform.isWindows) {
+    if (platform.isWindows) {
       valid = ValidationType.missing;
 
       messages.add(new ValidationMessage.error(
@@ -238,79 +234,9 @@ class NoIdeValidator extends DoctorValidator {
 
   @override
   Future<ValidationResult> validate() async {
-    // TODO(danrubel): do not show Atom once IntelliJ support is complete
     return new ValidationResult(ValidationType.missing, <ValidationMessage>[
-      new ValidationMessage('Atom - https://atom.io/'),
       new ValidationMessage('IntelliJ - https://www.jetbrains.com/idea/'),
     ], statusInfo: 'No supported IDEs installed');
-  }
-}
-
-class AtomValidator extends DoctorValidator {
-  AtomValidator() : super('Atom - a lightweight development environment for Flutter');
-
-  static Iterable<DoctorValidator> get installed {
-    AtomValidator atom = new AtomValidator();
-    return atom.isInstalled ? <DoctorValidator>[atom] : <DoctorValidator>[];
-  }
-
-  static File getConfigFile() {
-    // ~/.atom/config.cson
-    return new File(path.join(_getAtomHomePath(), 'config.cson'));
-  }
-
-  static String _getAtomHomePath() {
-    final Map<String, String> env = Platform.environment;
-    if (env['ATOM_HOME'] != null)
-      return env['ATOM_HOME'];
-    return os.isWindows
-      ? path.join(env['USERPROFILE'], '.atom')
-      : path.join(env['HOME'], '.atom');
-  }
-
-  bool get isInstalled => FileSystemEntity.isDirectorySync(_getAtomHomePath());
-
-  @override
-  Future<ValidationResult> validate() async {
-    List<ValidationMessage> messages = <ValidationMessage>[];
-
-    int installCount = 0;
-
-    if (_validateHasPackage(messages, 'flutter', 'Flutter'))
-      installCount++;
-
-    if (_validateHasPackage(messages, 'dartlang', 'Dart'))
-      installCount++;
-
-    return new ValidationResult(
-      installCount == 2 ? ValidationType.installed : ValidationType.partial,
-      messages
-    );
-  }
-
-  bool _validateHasPackage(List<ValidationMessage> messages, String packageName, String description) {
-    if (!hasPackage(packageName)) {
-      messages.add(new ValidationMessage(
-        '$packageName plugin not installed; this adds $description specific functionality to Atom.\n'
-        'Install the plugin from Atom or run \'apm install $packageName\'.'
-      ));
-      return false;
-    }
-    try {
-      String flutterPluginPath = path.join(_getAtomHomePath(), 'packages', packageName);
-      File packageFile = new File(path.join(flutterPluginPath, 'package.json'));
-      Map<String, dynamic> packageInfo = JSON.decode(packageFile.readAsStringSync());
-      String version = packageInfo['version'];
-      messages.add(new ValidationMessage('$packageName plugin version $version'));
-    } catch (error) {
-      printTrace('Unable to read $packageName plugin version: $error');
-    }
-    return true;
-  }
-
-  bool hasPackage(String packageName) {
-    String packagePath = path.join(_getAtomHomePath(), 'packages', packageName);
-    return FileSystemEntity.isDirectorySync(packagePath);
   }
 }
 
@@ -323,15 +249,13 @@ abstract class IntelliJValidator extends DoctorValidator {
   static final Map<String, String> _idToTitle = <String, String>{
     'IntelliJIdea' : 'IntelliJ IDEA Ultimate Edition',
     'IdeaIC' : 'IntelliJ IDEA Community Edition',
-    'WebStorm' : 'IntelliJ WebStorm',
   };
 
-  static Iterable<DoctorValidator> get installed {
-    if (Platform.isLinux)
-      return IntelliJValidatorOnLinux.installed;
-    if (Platform.isMacOS)
+  static Iterable<DoctorValidator> get installedValidators {
+    if (platform.isLinux || platform.isWindows)
+      return IntelliJValidatorOnLinuxAndWindows.installed;
+    if (platform.isMacOS)
       return IntelliJValidatorOnMac.installed;
-    // TODO(danrubel): add support for Windows
     return <DoctorValidator>[];
   }
 
@@ -368,23 +292,46 @@ abstract class IntelliJValidator extends DoctorValidator {
       ));
       return false;
     }
-    messages.add(new ValidationMessage('$title plugin installed'));
+    String version = _readPackageVersion(packageName);
+    messages.add(new ValidationMessage('$title plugin '
+        '${version != null ? "version $version" : "installed"}'));
     return true;
+  }
+
+  String _readPackageVersion(String packageName) {
+    String jarPath = packageName.endsWith('.jar')
+        ? path.join(pluginsPath, packageName)
+        : path.join(pluginsPath, packageName, 'lib', '$packageName.jar');
+    // TODO(danrubel) look for a better way to extract a single 2K file from the zip
+    // rather than reading the entire file into memory.
+    try {
+      Archive archive = new ZipDecoder().decodeBytes(fs.file(jarPath).readAsBytesSync());
+      ArchiveFile file = archive.findFile('META-INF/plugin.xml');
+      String content = UTF8.decode(file.content);
+      String versionStartTag = '<version>';
+      int start = content.indexOf(versionStartTag);
+      int end = content.indexOf('</version>', start);
+      return content.substring(start + versionStartTag.length, end);
+    } catch (_) {
+      return null;
+    }
   }
 
   bool hasPackage(String packageName) {
     String packagePath = path.join(pluginsPath, packageName);
     if (packageName.endsWith('.jar'))
-      return FileSystemEntity.isFileSync(packagePath);
-    return FileSystemEntity.isDirectorySync(packagePath);
+      return fs.isFileSync(packagePath);
+    return fs.isDirectorySync(packagePath);
   }
 }
 
-class IntelliJValidatorOnLinux extends IntelliJValidator {
-  IntelliJValidatorOnLinux(String title, this.version, this.pluginsPath) : super(title);
+class IntelliJValidatorOnLinuxAndWindows extends IntelliJValidator {
+  IntelliJValidatorOnLinuxAndWindows(String title, this.version, this.installPath, this.pluginsPath) : super(title);
 
   @override
   String version;
+
+  final String installPath;
 
   @override
   String pluginsPath;
@@ -392,7 +339,22 @@ class IntelliJValidatorOnLinux extends IntelliJValidator {
   static Iterable<DoctorValidator> get installed {
     List<DoctorValidator> validators = <DoctorValidator>[];
     if (homeDirPath == null) return validators;
-    for (FileSystemEntity dir in new Directory(homeDirPath).listSync()) {
+
+    void addValidator(String title, String version, String installPath, String pluginsPath) {
+      IntelliJValidatorOnLinuxAndWindows validator =
+        new IntelliJValidatorOnLinuxAndWindows(title, version, installPath, pluginsPath);
+      for (int index = 0; index < validators.length; ++index) {
+        DoctorValidator other = validators[index];
+        if (other is IntelliJValidatorOnLinuxAndWindows && validator.installPath == other.installPath) {
+          if (validator.version.compareTo(other.version) > 0)
+            validators[index] = validator;
+          return;
+        }
+      }
+      validators.add(validator);
+    }
+
+    for (FileSystemEntity dir in fs.directory(homeDirPath).listSync()) {
       if (dir is Directory) {
         String name = path.basename(dir.path);
         IntelliJValidator._idToTitle.forEach((String id, String title) {
@@ -400,13 +362,13 @@ class IntelliJValidatorOnLinux extends IntelliJValidator {
             String version = name.substring(id.length + 1);
             String installPath;
             try {
-              installPath = new File(path.join(dir.path, 'system', '.home')).readAsStringSync();
+              installPath = fs.file(path.join(dir.path, 'system', '.home')).readAsStringSync();
             } catch (e) {
               // ignored
             }
-            if (installPath != null && FileSystemEntity.isDirectorySync(installPath)) {
+            if (installPath != null && fs.isDirectorySync(installPath)) {
               String pluginsPath = path.join(dir.path, 'config', 'plugins');
-              validators.add(new IntelliJValidatorOnLinux(title, version, pluginsPath));
+              addValidator(title, version, installPath, pluginsPath);
             }
           }
         });
@@ -424,22 +386,48 @@ class IntelliJValidatorOnMac extends IntelliJValidator {
 
   static final Map<String, String> _dirNameToId = <String, String>{
     'IntelliJ IDEA.app' : 'IntelliJIdea',
+    'IntelliJ IDEA Ultimate.app' : 'IntelliJIdea',
     'IntelliJ IDEA CE.app' : 'IdeaIC',
-    'WebStorm.app' : 'WebStorm',
   };
 
   static Iterable<DoctorValidator> get installed {
     List<DoctorValidator> validators = <DoctorValidator>[];
-    for (FileSystemEntity dir in new Directory('/Applications').listSync()) {
-      if (dir is Directory) {
-        String name = path.basename(dir.path);
-        _dirNameToId.forEach((String dirName, String id) {
-          if (name == dirName) {
-            String title = IntelliJValidator._idToTitle[id];
-            validators.add(new IntelliJValidatorOnMac(title, id, dir.path));
+    List<String> installPaths = <String>['/Applications', path.join(homeDirPath, 'Applications')];
+
+    void checkForIntelliJ(Directory dir) {
+      String name = path.basename(dir.path);
+      _dirNameToId.forEach((String dirName, String id) {
+        if (name == dirName) {
+          String title = IntelliJValidator._idToTitle[id];
+          validators.add(new IntelliJValidatorOnMac(title, id, dir.path));
+        }
+      });
+    }
+
+    try {
+      Iterable<FileSystemEntity> installDirs = installPaths
+              .map((String installPath) => fs.directory(installPath).listSync())
+              .expand((List<FileSystemEntity> mappedDirs) => mappedDirs)
+              .where((FileSystemEntity mappedDir) => mappedDir is Directory);
+      for (FileSystemEntity dir in installDirs) {
+        if (dir is Directory) {
+          checkForIntelliJ(dir);
+          if (!dir.path.endsWith('.app')) {
+            for (FileSystemEntity subdir in dir.listSync()) {
+              if (subdir is Directory) {
+                checkForIntelliJ(subdir);
+              }
+            }
           }
-        });
+        }
       }
+    } on FileSystemException catch (e) {
+      validators.add(new ValidatorWithResult(
+          'Cannot determine if IntelliJ is installed',
+          new ValidationResult(ValidationType.missing, <ValidationMessage>[
+             new ValidationMessage.error(e.message),
+          ]),
+      ));
     }
     return validators;
   }
@@ -449,7 +437,7 @@ class IntelliJValidatorOnMac extends IntelliJValidator {
     if (_version == null) {
       String plist;
       try {
-        plist = new File(path.join(installPath, 'Contents', 'Info.plist')).readAsStringSync();
+        plist = fs.file(path.join(installPath, 'Contents', 'Info.plist')).readAsStringSync();
         int index = plist.indexOf('CFBundleShortVersionString');
         if (index > 0) {
           int start = plist.indexOf('<string>', index);
@@ -493,4 +481,13 @@ class DeviceValidator extends DoctorValidator {
     }
     return new ValidationResult(ValidationType.installed, messages);
   }
+}
+
+class ValidatorWithResult extends DoctorValidator {
+  final ValidationResult result;
+
+  ValidatorWithResult(String title, this.result) : super(title);
+
+  @override
+  Future<ValidationResult> validate() async => result;
 }

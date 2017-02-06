@@ -8,11 +8,9 @@ import 'dart:ui' as ui show lerpDouble;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/physics.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:meta/meta.dart';
 
 import 'animation.dart';
 import 'curves.dart';
-import 'forces.dart';
 import 'listener_helpers.dart';
 
 /// The direction in which an animation is running.
@@ -23,6 +21,17 @@ enum _AnimationDirection {
   /// The animation is running backwards, from end to beginning.
   reverse,
 }
+
+final SpringDescription _kFlingSpringDescription = new SpringDescription.withDampingRatio(
+  mass: 1.0,
+  springConstant: 500.0,
+  ratio: 1.0,
+);
+
+const Tolerance _kFlingTolerance = const Tolerance(
+  velocity: double.INFINITY,
+  distance: 0.01,
+);
 
 /// A controller for an animation.
 ///
@@ -49,12 +58,25 @@ class AnimationController extends Animation<double>
 
   /// Creates an animation controller.
   ///
-  /// * [value] is the initial value of the animation.
+  /// * [value] is the initial value of the animation. If defaults to the lower
+  ///   bound.
+  ///
   /// * [duration] is the length of time this animation should last.
-  /// * [debugLabel] is a string to help identify this animation during debugging (used by [toString]).
-  /// * [lowerBound] is the smallest value this animation can obtain and the value at which this animation is deemed to be dismissed.
-  /// * [upperBound] is the largest value this animation can obtain and the value at which this animation is deemed to be completed.
-  /// * `vsync` is the [TickerProvider] for the current context. It can be changed by calling [resync].
+  ///
+  /// * [debugLabel] is a string to help identify this animation during
+  ///   debugging (used by [toString]).
+  ///
+  /// * [lowerBound] is the smallest value this animation can obtain and the
+  ///   value at which this animation is deemed to be dismissed. It cannot be
+  ///   null.
+  ///
+  /// * [upperBound] is the largest value this animation can obtain and the
+  ///   value at which this animation is deemed to be completed. It cannot be
+  ///   null.
+  ///
+  /// * `vsync` is the [TickerProvider] for the current context. It can be
+  ///   changed by calling [resync]. It is required and cannot be null. See
+  ///   [TickerProvider] for advice on obtaining a ticker provider.
   AnimationController({
     double value,
     this.duration,
@@ -63,6 +85,8 @@ class AnimationController extends Animation<double>
     this.upperBound: 1.0,
     @required TickerProvider vsync,
   }) {
+    assert(lowerBound != null);
+    assert(upperBound != null);
     assert(upperBound >= lowerBound);
     assert(vsync != null);
     _direction = _AnimationDirection.forward;
@@ -73,9 +97,15 @@ class AnimationController extends Animation<double>
   /// Creates an animation controller with no upper or lower bound for its value.
   ///
   /// * [value] is the initial value of the animation.
+  ///
   /// * [duration] is the length of time this animation should last.
-  /// * [debugLabel] is a string to help identify this animation during debugging (used by [toString]).
-  /// * `vsync` is the [TickerProvider] for the current context. It can be changed by calling [resync].
+  ///
+  /// * [debugLabel] is a string to help identify this animation during
+  ///   debugging (used by [toString]).
+  ///
+  /// * `vsync` is the [TickerProvider] for the current context. It can be
+  ///   changed by calling [resync]. It is required and cannot be null. See
+  ///   [TickerProvider] for advice on obtaining a ticker provider.
   ///
   /// This constructor is most useful for animations that will be driven using a
   /// physics simulation, especially when the physics simulation has no
@@ -149,16 +179,23 @@ class AnimationController extends Animation<double>
     _checkStatusChanged();
   }
 
+  double get velocity {
+    if (!isAnimating)
+      return 0.0;
+    return _simulation.dx(lastElapsedDuration.inMicroseconds.toDouble() / Duration.MICROSECONDS_PER_SECOND);
+  }
+
   void _internalSetValue(double newValue) {
     _value = newValue.clamp(lowerBound, upperBound);
     if (_value == lowerBound) {
       _status = AnimationStatus.dismissed;
     } else if (_value == upperBound) {
       _status = AnimationStatus.completed;
-    } else
+    } else {
       _status = (_direction == _AnimationDirection.forward) ?
         AnimationStatus.forward :
         AnimationStatus.reverse;
+    }
   }
 
   /// The amount of time that has passed between the time the animation started and the most recent tick of the animation.
@@ -173,7 +210,7 @@ class AnimationController extends Animation<double>
   /// controller's ticker might get muted, in which case the animation
   /// controller's callbacks will no longer fire even though time is continuing
   /// to pass. See [Ticker.muted] and [TickerMode].
-  bool get isAnimating => _ticker.isActive;
+  bool get isAnimating => _ticker != null && _ticker.isActive;
 
   _AnimationDirection _direction;
 
@@ -278,13 +315,16 @@ class AnimationController extends Animation<double>
     return animateWith(new _RepeatingSimulation(min, max, period));
   }
 
-  /// Flings the timeline with an optional force (defaults to a critically
-  /// damped spring within [lowerBound] and [upperBound]) and initial velocity.
+  /// Drives the animation with a critically damped spring (within [lowerBound] and [upperBound]) and initial velocity.
+  ///
   /// If velocity is positive, the animation will complete, otherwise it will dismiss.
-  Future<Null> fling({ double velocity: 1.0, Force force }) {
-    force ??= kDefaultSpringForce.copyWith(left: lowerBound, right: upperBound);
+  Future<Null> fling({ double velocity: 1.0 }) {
     _direction = velocity < 0.0 ? _AnimationDirection.reverse : _AnimationDirection.forward;
-    return animateWith(force.release(value, velocity));
+    final double target = velocity < 0.0 ? lowerBound - _kFlingTolerance.distance
+                                         : upperBound + _kFlingTolerance.distance;
+    Simulation simulation = new SpringSimulation(_kFlingSpringDescription, value, target, velocity)
+      ..tolerance = _kFlingTolerance;
+    return animateWith(simulation);
   }
 
   /// Drives the animation according to the given simulation.
@@ -321,7 +361,17 @@ class AnimationController extends Animation<double>
   /// after this method is called.
   @override
   void dispose() {
+    assert(() {
+      if (_ticker == null) {
+        throw new FlutterError(
+          'AnimationController.dispose() called more than once.\n'
+          'A given AnimationController cannot be disposed more than once.'
+        );
+      }
+      return true;
+    });
     _ticker.dispose();
+    _ticker = null;
     super.dispose();
   }
 
@@ -337,6 +387,7 @@ class AnimationController extends Animation<double>
   void _tick(Duration elapsed) {
     _lastElapsedDuration = elapsed;
     double elapsedInSeconds = elapsed.inMicroseconds.toDouble() / Duration.MICROSECONDS_PER_SECOND;
+    assert(elapsedInSeconds >= 0.0);
     _value = _simulation.x(elapsedInSeconds).clamp(lowerBound, upperBound);
     if (_simulation.isDone(elapsedInSeconds)) {
       _status = (_direction == _AnimationDirection.forward) ?
@@ -351,10 +402,10 @@ class AnimationController extends Animation<double>
   @override
   String toStringDetails() {
     String paused = isAnimating ? '' : '; paused';
-    String silenced = _ticker.muted ? '; silenced' : '';
+    String ticker = _ticker == null ? '; DISPOSED' : (_ticker.muted ? '; silenced' : '');
     String label = debugLabel == null ? '' : '; for $debugLabel';
     String more = '${super.toStringDetails()} ${value.toStringAsFixed(3)}';
-    return '$more$paused$silenced$label';
+    return '$more$paused$ticker$label';
   }
 }
 
@@ -373,7 +424,6 @@ class _InterpolationSimulation extends Simulation {
 
   @override
   double x(double timeInSeconds) {
-    assert(timeInSeconds >= 0.0);
     double t = (timeInSeconds / _durationInSeconds).clamp(0.0, 1.0);
     if (t == 0.0)
       return _begin;
@@ -384,7 +434,10 @@ class _InterpolationSimulation extends Simulation {
   }
 
   @override
-  double dx(double timeInSeconds) => 1.0;
+  double dx(double timeInSeconds) {
+    double epsilon = tolerance.time;
+    return (x(timeInSeconds + epsilon) - x(timeInSeconds - epsilon)) / (2 * epsilon);
+  }
 
   @override
   bool isDone(double timeInSeconds) => timeInSeconds > _durationInSeconds;
@@ -409,7 +462,7 @@ class _RepeatingSimulation extends Simulation {
   }
 
   @override
-  double dx(double timeInSeconds) => 1.0;
+  double dx(double timeInSeconds) => (max - min) / _periodInSeconds;
 
   @override
   bool isDone(double timeInSeconds) => false;

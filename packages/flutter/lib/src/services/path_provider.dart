@@ -7,26 +7,25 @@ import 'dart:io';
 
 import 'platform_messages.dart';
 
+const String _kChannelName = 'flutter/platform';
+
 /// Returns commonly used locations on the filesystem.
 class PathProvider {
   PathProvider._();
 
-  /// Path to the temporary directory on the device. Files in this directory
-  /// may be cleared at any time. This does *not* return a new temporary
-  /// directory. Instead, the caller is responsible for creating
+  /// Path to the temporary directory on the device.
+  ///
+  /// Files in this directory may be cleared at any time. This does *not* return
+  /// a new temporary directory. Instead, the caller is responsible for creating
   /// (and cleaning up) files or directories within this directory. This
   /// directory is scoped to the calling application.
   ///
-  /// Examples:
+  /// On iOS, this uses the `NSTemporaryDirectory` API.
   ///
-  ///  * _iOS_: `NSTemporaryDirectory()`
-  ///  * _Android_: `getCacheDir()` on the context.
+  /// On Android, this uses the `getCacheDir` API on the context.
   static Future<Directory> getTemporaryDirectory() async {
-    Map<String, dynamic> result =
-      await PlatformMessages.sendJSON('flutter/platform', <String, dynamic>{
-        'method': 'PathProvider.getTemporaryDirectory',
-        'args': const <Null>[],
-      });
+    Map<String, dynamic> result = await PlatformMessages.invokeMethod(
+        _kChannelName, 'PathProvider.getTemporaryDirectory');
     if (result == null)
       return null;
     return new Directory(result['path']);
@@ -36,16 +35,12 @@ class PathProvider {
   /// to the application and will only be cleared when the application itself
   /// is deleted.
   ///
-  /// Examples:
+  /// On iOS, this uses the `NSDocumentsDirectory` API.
   ///
-  ///  * _iOS_: `NSDocumentsDirectory`
-  ///  * _Android_: The AppData directory.
+  /// On Android, this returns the AppData directory.
   static Future<Directory> getApplicationDocumentsDirectory() async {
-    Map<String, dynamic> result =
-        await PlatformMessages.sendJSON('flutter/platform', <String, dynamic>{
-      'method': 'PathProvider.getApplicationDocumentsDirectory',
-      'args': const <Null>[],
-    });
+    Map<String, dynamic> result = await PlatformMessages.invokeMethod(
+        _kChannelName, 'PathProvider.getApplicationDocumentsDirectory');
     if (result == null)
       return null;
     return new Directory(result['path']);

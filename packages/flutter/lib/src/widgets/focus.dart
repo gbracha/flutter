@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import 'basic.dart';
 import 'framework.dart';
@@ -24,7 +24,7 @@ class _FocusScope extends InheritedWidget {
     this.scopeFocused,
     this.focusedScope,
     this.focusedWidget,
-    Widget child
+    @required Widget child,
   }) : super(key: key, child: child) {
     assert(scopeFocused != null);
   }
@@ -104,7 +104,7 @@ class _FocusScope extends InheritedWidget {
 /// widget in this part of the focus tree. If this Focus widget is the currently
 /// focused subtree of the focus system (i.e., the path from it to the root is
 /// focused at each level and it hasn't focused any of its enclosed Focus
-/// widgets), then the widget this this global key actually has the focus in the
+/// widgets), then the widget with this global key actually has the focus in the
 /// entire system.
 class Focus extends StatefulWidget {
   /// Creates a scope for managing focus.
@@ -113,7 +113,7 @@ class Focus extends StatefulWidget {
   Focus({
     @required GlobalKey key,
     this.initiallyFocusedScope,
-    this.child
+    @required this.child,
   }) : super(key: key) {
     assert(key != null);
   }

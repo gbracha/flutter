@@ -2,10 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
+
 import 'dart:math' as math;
 import 'dart:typed_data';
-
-import 'package:meta/meta.dart';
 
 import 'box.dart';
 import 'object.dart';
@@ -520,7 +520,7 @@ class RenderGrid extends RenderVirtualViewport<GridParentData> {
     int virtualChildBase: 0,
     int virtualChildCount,
     Offset paintOffset: Offset.zero,
-    LayoutCallback callback
+    LayoutCallback<BoxConstraints> callback
   }) : _delegate = delegate, _virtualChildBase = virtualChildBase, super(
     virtualChildCount: virtualChildCount,
     paintOffset: paintOffset,
@@ -532,11 +532,15 @@ class RenderGrid extends RenderVirtualViewport<GridParentData> {
 
   /// The delegate that controls the layout of the children.
   ///
+  /// For example, a [FixedColumnCountGridDelegate] for grids that have a fixed
+  /// number of columns or a [MaxTileWidthGridDelegate] for grids that have a
+  /// maximum tile width.
+  ///
   /// If the new delegate is the same as the previous one, this does nothing.
   ///
   /// If the new delegate is the same class as the previous one, then the new
   /// delegate has its [GridDelegate.shouldRelayout] called; if the result is
-  /// `true`, then the delegate will be called.
+  /// true, then the delegate will be called.
   ///
   /// If the new delegate is a different class than the previous one, then the
   /// delegate will be called.
@@ -639,7 +643,7 @@ class RenderGrid extends RenderVirtualViewport<GridParentData> {
     size = constraints.constrain(gridSize);
 
     if (callback != null)
-      invokeLayoutCallback(callback);
+      invokeLayoutCallback<BoxConstraints>(callback);
 
     double gridTopPadding = 0.0;
     double gridLeftPadding = 0.0;

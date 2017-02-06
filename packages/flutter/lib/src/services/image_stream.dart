@@ -5,8 +5,6 @@
 import 'dart:async';
 import 'dart:ui' as ui show Image;
 
-import 'package:meta/meta.dart';
-
 import 'package:flutter/foundation.dart';
 
 /// A [ui.Image] object with its corresponding scale.
@@ -241,7 +239,7 @@ class OneFrameImageStreamCompleter extends ImageStreamCompleter {
   /// FlutterErrorDetails]).
   OneFrameImageStreamCompleter(Future<ImageInfo> image, { InformationCollector informationCollector }) {
     assert(image != null);
-    image.then(setImage, onError: (dynamic error, StackTrace stack) {
+    image.then<Null>(setImage, onError: (dynamic error, StackTrace stack) {
       FlutterError.reportError(new FlutterErrorDetails(
         exception: error,
         stack: stack,

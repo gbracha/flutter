@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'colors.dart';
@@ -32,7 +33,7 @@ class TwoLevelListItem extends StatelessWidget {
   TwoLevelListItem({
     Key key,
     this.leading,
-    this.title,
+    @required this.title,
     this.trailing,
     this.enabled: true,
     this.onTap,
@@ -58,7 +59,7 @@ class TwoLevelListItem extends StatelessWidget {
 
   /// Whether this list item is interactive.
   ///
-  /// If `false`, this list item is styled with the disabled color from the
+  /// If false, this list item is styled with the disabled color from the
   /// current [Theme] and the [onTap] and [onLongPress] callbacks are
   /// inoperative.
   final bool enabled;
@@ -107,10 +108,10 @@ class TwoLevelSublist extends StatefulWidget {
   TwoLevelSublist({
     Key key,
     this.leading,
-    this.title,
+    @required this.title,
     this.backgroundColor,
     this.onOpenChanged,
-    this.children
+    this.children: const <Widget>[],
   }) : super(key: key);
 
   /// A widget to display before the title.
@@ -127,7 +128,7 @@ class TwoLevelSublist extends StatefulWidget {
   ///
   /// When the sublist starts expanding, this function is called with the value
   /// `true`. When the sublist starts collapsing, this function is called with
-  /// the value `false`.
+  /// the value false.
   final ValueChanged<bool> onOpenChanged;
 
   /// The widgets that are displayed when the sublist expands.
@@ -255,14 +256,14 @@ class _TwoLevelSublistState extends State<TwoLevelSublist> with SingleTickerProv
 ///
 ///  * [TwoLevelSublist]
 ///  * [TwoLevelListItem]
+///  * [MaterialList], for lists that only have one level.
 class TwoLevelList extends StatelessWidget {
   /// Creates a scrollable list of items that can expand and collapse.
   ///
   /// The [type] argument must not be null.
   TwoLevelList({
     Key key,
-    this.scrollableKey,
-    this.children,
+    this.children: const <Widget>[],
     this.type: MaterialListType.twoLine,
     this.padding
   }) : super(key: key) {
@@ -277,18 +278,15 @@ class TwoLevelList extends StatelessWidget {
   /// The kind of [ListItem] contained in this list.
   final MaterialListType type;
 
-  /// The key to use for the underlying scrollable widget.
-  final Key scrollableKey;
-
   /// The amount of space by which to inset the children inside the viewport.
   final EdgeInsets padding;
 
   @override
   Widget build(BuildContext context) {
-    return new Block(
+    return new ListView(
       padding: padding,
+      shrinkWrap: true,
       children: KeyedSubtree.ensureUniqueKeysForList(children),
-      scrollableKey: scrollableKey
     );
   }
 }

@@ -18,14 +18,14 @@ void main() {
           steps: <Step>[
             new Step(
               title: new Text('Step 1'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
             ),
             new Step(
               title: new Text('Step 2'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
@@ -34,7 +34,6 @@ void main() {
         )
       )
     );
-
     await tester.tap(find.text('Step 2'));
     expect(index, 1);
   });
@@ -47,14 +46,14 @@ void main() {
             steps: <Step>[
               new Step(
                 title: new Text('Step 1'),
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 100.0,
                   height: 100.0
                 )
               ),
               new Step(
                 title: new Text('Step 2'),
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 200.0,
                   height: 200.0
                 )
@@ -76,14 +75,14 @@ void main() {
             steps: <Step>[
               new Step(
                 title: new Text('Step 1'),
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 100.0,
                   height: 100.0
                 )
               ),
               new Step(
                 title: new Text('Step 2'),
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 200.0,
                   height: 200.0
                 )
@@ -111,7 +110,7 @@ void main() {
             steps: <Step>[
               new Step(
                 title: new Text('Step 1'),
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 100.0,
                   height: 100.0
                 )
@@ -188,14 +187,14 @@ void main() {
           steps: <Step>[
             new Step(
               title: new Text('Step 1'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
             ),
             new Step(
               title: new Text('Step 2'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 200.0,
                 height: 200.0
               )
@@ -224,7 +223,7 @@ void main() {
           steps: <Step>[
             new Step(
               title: new Text('Step 1'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
@@ -232,7 +231,7 @@ void main() {
             new Step(
               title: new Text('Step 2'),
               state: StepState.disabled,
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
@@ -253,21 +252,21 @@ void main() {
           steps: <Step>[
             new Step(
               title: new Text('Step 1'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 300.0
               )
             ),
             new Step(
               title: new Text('Step 2'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 300.0
               )
             ),
             new Step(
               title: new Text('Step 3'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
@@ -277,8 +276,8 @@ void main() {
       )
     );
 
-    ScrollableState scrollableState = tester.firstState(find.byType(Scrollable));
-    expect(scrollableState.scrollOffset, 0.0);
+    Scrollable2State scrollableState = tester.firstState(find.byType(Scrollable2));
+    expect(scrollableState.position.pixels, 0.0);
 
     await tester.tap(find.text('Step 3'));
     await tester.pumpWidget(
@@ -288,21 +287,21 @@ void main() {
           steps: <Step>[
             new Step(
               title: new Text('Step 1'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 300.0
               )
             ),
             new Step(
               title: new Text('Step 2'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 300.0
               )
             ),
             new Step(
               title: new Text('Step 3'),
-              content: new SizedBox(
+              content: const SizedBox(
                 width: 100.0,
                 height: 100.0
               )
@@ -312,9 +311,9 @@ void main() {
       )
     );
 
-    await tester.pump(new Duration(milliseconds: 100));
-    expect(scrollableState.scrollOffset, greaterThan(0.0));
-  });
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(scrollableState.position.pixels, greaterThan(0.0));
+  }, skip: Scrollable != Scrollable2); // TODO(abarth): re-enable when ensureVisible is implemented
 
   testWidgets('Stepper index test', (WidgetTester tester) async {
     await tester.pumpWidget(
@@ -325,14 +324,14 @@ void main() {
               new Step(
                 title: new Text('A'),
                 state: StepState.complete,
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 100.0,
                   height: 100.0
                 )
               ),
               new Step(
                 title: new Text('B'),
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 100.0,
                   height: 100.0
                 )
@@ -356,7 +355,7 @@ void main() {
               new Step(
                 title: new Text('A'),
                 state: StepState.error,
-                content: new SizedBox(
+                content: const SizedBox(
                   width: 100.0,
                   height: 100.0
                 )

@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'button.dart';
 import 'flat_button.dart';
@@ -11,9 +11,8 @@ import 'material.dart';
 import 'scaffold.dart';
 import 'theme_data.dart';
 import 'theme.dart';
-import 'typography.dart';
 
-// https://www.google.com/design/spec/components/snackbars-toasts.html#snackbars-toasts-specs
+// https://material.google.com/components/snackbars-toasts.html#snackbars-toasts-specs
 const double _kSnackBarPadding = 24.0;
 const double _kSingleLineVerticalPadding = 14.0;
 const double _kMultiLineVerticalTopPadding = 24.0;
@@ -27,10 +26,43 @@ const Color _kSnackBackground = const Color(0xFF323232);
 // TODO(ianh): Implement the Tablet version of snackbar if we're "on a tablet".
 
 const Duration _kSnackBarTransitionDuration = const Duration(milliseconds: 250);
-const Duration _kSnackBarShortDisplayDuration = const Duration(milliseconds: 1500);
-const Duration _kSnackBarMediumDisplayDuration = const Duration(milliseconds: 2750);
+const Duration _kSnackBarDisplayDuration = const Duration(milliseconds: 1500);
 const Curve _snackBarHeightCurve = Curves.fastOutSlowIn;
 const Curve _snackBarFadeCurve = const Interval(0.72, 1.0, curve: Curves.fastOutSlowIn);
+
+/// Specify how a [SnackBar] was closed.
+///
+/// The [showSnackBar] function returns a [ScaffoldFeatureController]. The value
+/// of the controller's closed property is a Future that resolves to a
+/// SnackBarClosedReason. Applications that need to know how a snackbar
+/// was closed can use this value.
+///
+/// Example:
+///
+/// ```dart
+/// Scaffold.of(context).showSnackBar(
+///   new SnackBar( ... )
+/// ).closed.then((SnackBarClosedReason reason) {
+///    ...
+/// });
+/// ```
+enum SnackBarClosedReason {
+  /// The snack bar was closed after the user tapped a [SnackBarAction].
+  action,
+
+  /// The snack bar was closed by a user's swipe.
+  swipe,
+
+  /// The snack bar was closed by the [ScaffoldFeatureController] close callback
+  /// or by calling [hideCurrentSnackBar] directly.
+  hide,
+
+  /// The snack bar was closed by an call to [removeCurrentSnackBar].
+  remove,
+
+  /// The snack bar was closed because its timer expired.
+  timeout,
+}
 
 /// A button for a [SnackBar], known as an "action".
 ///
@@ -42,7 +74,7 @@ const Curve _snackBarFadeCurve = const Interval(0.72, 1.0, curve: Curves.fastOut
 /// See also:
 ///
 ///  * [SnackBar]
-///  * <https://www.google.com/design/spec/components/snackbars-toasts.html>
+///  * <https://material.google.com/components/snackbars-toasts.html>
 class SnackBarAction extends StatefulWidget {
   /// Creates an action for a [SnackBar].
   ///
@@ -79,6 +111,7 @@ class _SnackBarActionState extends State<SnackBarAction> {
       _haveTriggeredAction = true;
     });
     config.onPressed();
+    Scaffold.of(context).hideCurrentSnackBar(reason: SnackBarClosedReason.action);
   }
 
   @override
@@ -93,23 +126,32 @@ class _SnackBarActionState extends State<SnackBarAction> {
 /// A lightweight message with an optional action which briefly displays at the
 /// bottom of the screen.
 ///
-/// Displayed with the Scaffold.of().showSnackBar() API.
+/// To display a snack bar, call `Scaffold.of(context).showSnackBar()`, passing
+/// an instance of [SnackBar] that describes the message.
+///
+/// To control how long the [SnackBar] remains visible, specify a [duration].
 ///
 /// See also:
 ///
-///  * [Scaffold.of] and [ScaffoldState.showSnackBar]
-///  * [SnackBarAction]
-///  * <https://www.google.com/design/spec/components/snackbars-toasts.html>
+///  * [Scaffold.of], to obtain the current [ScaffoldState], which manages the
+///    display and animation of snack bars.
+///  * [ScaffoldState.showSnackBar], which displays a [SnackBar].
+///  * [ScaffoldState.removeCurrentSnackBar], which abruptly hides the currently
+///    displayed snack bar, if any, and allows the next to be displayed.
+///  * [SnackBarAction], which is used to specify an [action] button to show
+///    on the snack bar.
+///  * <https://material.google.com/components/snackbars-toasts.html>
 class SnackBar extends StatelessWidget {
   /// Creates a snack bar.
   ///
   /// The [content] argument must be non-null.
   SnackBar({
     Key key,
-    this.content,
+    @required this.content,
+    this.backgroundColor,
     this.action,
-    this.duration: _kSnackBarShortDisplayDuration,
-    this.animation
+    this.duration: _kSnackBarDisplayDuration,
+    this.animation,
   }) : super(key: key) {
     assert(content != null);
   }
@@ -119,13 +161,27 @@ class SnackBar extends StatelessWidget {
   /// Typically a [Text] widget.
   final Widget content;
 
+  /// The Snackbar's background color. By default the color is dark grey.
+  final Color backgroundColor;
+
   /// (optional) An action that the user can take based on the snack bar.
   ///
   /// For example, the snack bar might let the user undo the operation that
   /// prompted the snackbar. Snack bars can have at most one action.
+  ///
+  /// The action should not be "dismiss" or "cancel".
   final SnackBarAction action;
 
   /// The amount of time the snack bar should be displayed.
+  ///
+  /// Defaults to 1.5s.
+  ///
+  /// See also:
+  ///
+  ///  * [ScaffoldState.removeCurrentSnackBar], which abruptly hides the
+  ///    currently displayed snack bar, if any, and allows the next to be
+  ///    displayed.
+  ///  * <https://material.google.com/components/snackbars-toasts.html>
   final Duration duration;
 
   /// The animation driving the entrance and exit of the snack bar.
@@ -134,14 +190,20 @@ class SnackBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     assert(animation != null);
+    ThemeData theme = Theme.of(context);
+    ThemeData darkTheme = new ThemeData(
+      brightness: Brightness.dark,
+      accentColor: theme.accentColor,
+      accentColorBrightness: theme.accentColorBrightness
+    );
     List<Widget> children = <Widget>[
       const SizedBox(width: _kSnackBarPadding),
-      new Flexible(
+      new Expanded(
         child: new Container(
           padding: const EdgeInsets.symmetric(vertical: _kSingleLineVerticalPadding),
           child: new DefaultTextStyle(
-            style: Typography.white.subhead,
-            child: content
+            style: darkTheme.textTheme.subhead,
+            child: content,
           )
         )
       )
@@ -157,7 +219,6 @@ class SnackBar extends StatelessWidget {
     }
     CurvedAnimation heightAnimation = new CurvedAnimation(parent: animation, curve: _snackBarHeightCurve);
     CurvedAnimation fadeAnimation = new CurvedAnimation(parent: animation, curve: _snackBarFadeCurve, reverseCurve: const Threshold(0.0));
-    ThemeData theme = Theme.of(context);
     return new ClipRect(
       child: new AnimatedBuilder(
         animation: heightAnimation,
@@ -175,18 +236,13 @@ class SnackBar extends StatelessWidget {
             direction: DismissDirection.down,
             resizeDuration: null,
             onDismissed: (DismissDirection direction) {
-              Scaffold.of(context).removeCurrentSnackBar();
+              Scaffold.of(context).removeCurrentSnackBar(reason: SnackBarClosedReason.swipe);
             },
             child: new Material(
               elevation: 6,
-              color: _kSnackBackground,
+              color: backgroundColor ?? _kSnackBackground,
               child: new Theme(
-                data: new ThemeData(
-                  brightness: Brightness.dark,
-                  accentColor: theme.accentColor,
-                  accentColorBrightness: theme.accentColorBrightness,
-                  textTheme: Typography.white
-                ),
+                data: darkTheme,
                 child: new FadeTransition(
                   opacity: fadeAnimation,
                   child: new Row(
@@ -221,6 +277,7 @@ class SnackBar extends StatelessWidget {
     return new SnackBar(
       key: key ?? fallbackKey,
       content: content,
+      backgroundColor: backgroundColor,
       action: action,
       duration: duration,
       animation: newAnimation

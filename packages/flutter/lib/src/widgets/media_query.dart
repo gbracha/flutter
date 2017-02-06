@@ -4,7 +4,7 @@
 
 import 'dart:ui' as ui;
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import 'basic.dart';
 import 'framework.dart';
@@ -72,6 +72,20 @@ class MediaQueryData {
     return size.width > size.height ? Orientation.landscape : Orientation.portrait;
   }
 
+  MediaQueryData copyWith({
+    Size size,
+    double devicePixelRatio,
+    double textScaleFactor,
+    EdgeInsets padding,
+  }) {
+    return new MediaQueryData(
+      size: size ?? this.size,
+      devicePixelRatio: devicePixelRatio ?? this.devicePixelRatio,
+      textScaleFactor: textScaleFactor ?? this.textScaleFactor,
+      padding: padding ?? this.padding,
+    );
+  }
+
   @override
   bool operator ==(Object other) {
     if (other.runtimeType != runtimeType)
@@ -107,7 +121,7 @@ class MediaQuery extends InheritedWidget {
   MediaQuery({
     Key key,
     @required this.data,
-    @required Widget child
+    @required Widget child,
   }) : super(key: key, child: child) {
     assert(child != null);
     assert(data != null);
@@ -124,6 +138,12 @@ class MediaQuery extends InheritedWidget {
   /// You can use this function to query the size an orientation of the screen.
   /// When that information changes, your widget will be scheduled to be rebuilt,
   /// keeping your widget up-to-date.
+  ///
+  /// Typical usage is as follows:
+  ///
+  /// ```dart
+  /// MediaQueryData media = MediaQuery.of(context);
+  /// ```
   static MediaQueryData of(BuildContext context) {
     MediaQuery query = context.inheritFromWidgetOfExactType(MediaQuery);
     return query?.data ?? new MediaQueryData.fromWindow(ui.window);

@@ -17,14 +17,14 @@ class FractionalOffset {
 
   /// The distance fraction in the horizontal direction.
   ///
-  /// A value of 0.0 cooresponds to the leftmost edge. A value of 1.0
-  /// cooresponds to the rightmost edge.
+  /// A value of 0.0 corresponds to the leftmost edge. A value of 1.0
+  /// corresponds to the rightmost edge.
   final double dx;
 
   /// The distance fraction in the vertical direction.
   ///
-  /// A value of 0.0 cooresponds to the topmost edge. A value of 1.0
-  /// cooresponds to the bottommost edge.
+  /// A value of 0.0 corresponds to the topmost edge. A value of 1.0
+  /// corresponds to the bottommost edge.
   final double dy;
 
   /// The top left corner.
@@ -141,7 +141,7 @@ class FractionalOffset {
     if (a == null)
       return new FractionalOffset(b.dx * t, b.dy * t);
     if (b == null)
-      return new FractionalOffset(b.dx * (1.0 - t), b.dy * (1.0 - t));
+      return new FractionalOffset(a.dx * (1.0 - t), a.dy * (1.0 - t));
     return new FractionalOffset(ui.lerpDouble(a.dx, b.dx, t), ui.lerpDouble(a.dy, b.dy, t));
   }
 

@@ -5,8 +5,8 @@
 import 'debug.dart';
 import 'framework.dart';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
-import 'package:meta/meta.dart';
 
 /// The signature of the [LayoutBuilder] builder function.
 typedef Widget LayoutWidgetBuilder(BuildContext context, BoxConstraints constraints);
@@ -70,7 +70,7 @@ class _LayoutBuilderElement extends RenderObjectElement {
   }
 
   @override
-  void detachChild(Element child) {
+  void forgetChild(Element child) {
     assert(child == _child);
     _child = null;
   }
@@ -151,12 +151,12 @@ class _LayoutBuilderElement extends RenderObjectElement {
 
 class _RenderLayoutBuilder extends RenderBox with RenderObjectWithChildMixin<RenderBox> {
   _RenderLayoutBuilder({
-    LayoutCallback callback,
+    LayoutCallback<BoxConstraints> callback,
   }) : _callback = callback;
 
-  LayoutCallback get callback => _callback;
-  LayoutCallback _callback;
-  set callback(LayoutCallback value) {
+  LayoutCallback<BoxConstraints> get callback => _callback;
+  LayoutCallback<BoxConstraints> _callback;
+  set callback(LayoutCallback<BoxConstraints> value) {
     if (value == _callback)
       return;
     _callback = value;

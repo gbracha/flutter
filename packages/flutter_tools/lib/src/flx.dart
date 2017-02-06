@@ -3,14 +3,15 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
 import 'asset.dart';
-import 'base/file_system.dart' show ensureDirectoryExists;
+import 'base/common.dart';
+import 'base/file_system.dart';
 import 'base/process.dart';
 import 'dart/package_map.dart';
+import 'devfs.dart';
 import 'build_info.dart';
 import 'globals.dart';
 import 'toolchain.dart';
@@ -18,7 +19,7 @@ import 'zip.dart';
 
 const String defaultMainPath = 'lib/main.dart';
 const String defaultAssetBasePath = '.';
-const String defaultManifestPath = 'flutter.yaml';
+const String defaultManifestPath = 'pubspec.yaml';
 String get defaultFlxOutputPath => path.join(getBuildDirectory(), 'app.flx');
 String get defaultSnapshotPath => path.join(getBuildDirectory(), 'snapshot_blob.bin');
 String get defaultDepfilePath => path.join(getBuildDirectory(), 'snapshot_blob.bin.d');
@@ -59,18 +60,17 @@ Future<String> buildFlx({
   bool precompiledSnapshot: false,
   bool includeRobotoFonts: true
 }) async {
-  int result;
-  result = await build(
+  await build(
     snapshotPath: defaultSnapshotPath,
     outputPath: defaultFlxOutputPath,
     mainPath: mainPath,
     precompiledSnapshot: precompiledSnapshot,
     includeRobotoFonts: includeRobotoFonts
   );
-  return result == 0 ? defaultFlxOutputPath : null;
+  return defaultFlxOutputPath;
 }
 
-Future<int> build({
+Future<Null> build({
   String snapshotterPath,
   String mainPath: defaultMainPath,
   String manifestPath: defaultManifestPath,
@@ -104,12 +104,10 @@ Future<int> build({
       depfilePath: depfilePath,
       packages: packagesPath
     );
-    if (result != 0) {
-      printError('Failed to run the Flutter compiler. Exit code: $result');
-      return result;
-    }
+    if (result != 0)
+      throwToolExit('Failed to run the Flutter compiler. Exit code: $result', exitCode: result);
 
-    snapshotFile = new File(snapshotPath);
+    snapshotFile = fs.file(snapshotPath);
   }
 
   return assemble(
@@ -118,22 +116,26 @@ Future<int> build({
     outputPath: outputPath,
     privateKeyPath: privateKeyPath,
     workingDirPath: workingDirPath,
+    packagesPath: packagesPath,
     includeRobotoFonts: includeRobotoFonts,
     reportLicensedPackages: reportLicensedPackages
   );
 }
 
-Future<int> assemble({
+Future<Null> assemble({
   String manifestPath,
   File snapshotFile,
   String outputPath,
   String privateKeyPath: defaultPrivateKeyPath,
   String workingDirPath,
+  String packagesPath,
+  bool includeDefaultFonts: true,
   bool includeRobotoFonts: true,
   bool reportLicensedPackages: false
 }) async {
   outputPath ??= defaultFlxOutputPath;
   workingDirPath ??= getAssetBuildDirectory();
+  packagesPath ??= path.absolute(PackageMap.globalPackagesPath);
   printTrace('Building $outputPath');
 
   // Build the asset bundle.
@@ -141,12 +143,13 @@ Future<int> assemble({
   int result = await assetBundle.build(
     manifestPath: manifestPath,
     workingDirPath: workingDirPath,
+    packagesPath: packagesPath,
+    includeDefaultFonts: includeDefaultFonts,
     includeRobotoFonts: includeRobotoFonts,
     reportLicensedPackages: reportLicensedPackages
   );
-  if (result != 0) {
-    return result;
-  }
+  if (result != 0)
+    throwToolExit('Error building $outputPath: $result', exitCode: result);
 
   ZipBuilder zipBuilder = new ZipBuilder();
 
@@ -154,14 +157,12 @@ Future<int> assemble({
   zipBuilder.entries.addAll(assetBundle.entries);
 
   if (snapshotFile != null)
-    zipBuilder.addEntry(new AssetBundleEntry.fromFile(_kSnapshotKey, snapshotFile));
+    zipBuilder.entries[_kSnapshotKey] = new DevFSFileContent(snapshotFile);
 
   ensureDirectoryExists(outputPath);
 
   printTrace('Encoding zip file to $outputPath');
-  zipBuilder.createZip(new File(outputPath), new Directory(workingDirPath));
+  await zipBuilder.createZip(fs.file(outputPath), fs.directory(workingDirPath));
 
   printTrace('Built $outputPath.');
-
-  return 0;
 }

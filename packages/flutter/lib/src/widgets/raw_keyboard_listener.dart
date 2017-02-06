@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 import 'basic.dart';
@@ -14,23 +15,23 @@ import 'framework.dart';
 /// hardware buttons that are represented as keys. Typically used by games and
 /// other apps that use keyboards for purposes other than text entry.
 ///
-/// For text entry, consider using a [RawInputLine], which integrates with
+/// For text entry, consider using a [EditableText], which integrates with
 /// on-screen keyboards and input method editors (IMEs).
 ///
 /// See also:
 ///
-///  * [RawInputLine], which should be used instead of this widget for text
+///  * [EditableText], which should be used instead of this widget for text
 ///    entry.
 class RawKeyboardListener extends StatefulWidget {
   /// Creates a widget that receives raw keyboard events.
   ///
-  /// For text entry, consider using a [RawInputLine], which integrates with
+  /// For text entry, consider using a [EditableText], which integrates with
   /// on-screen keyboards and input method editors (IMEs).
   RawKeyboardListener({
     Key key,
     this.focused: false,
     this.onKey,
-    this.child
+    @required this.child,
   }) : super(key: key) {
     assert(child != null);
   }
@@ -82,12 +83,14 @@ class _RawKeyboardListenerState extends State<RawKeyboardListener> {
     if (_listening)
       return;
     RawKeyboard.instance.addListener(_handleRawKeyEvent);
+    _listening = true;
   }
 
   void _detachKeyboardIfAttached() {
     if (!_listening)
       return;
     RawKeyboard.instance.removeListener(_handleRawKeyEvent);
+    _listening = false;
   }
 
   void _handleRawKeyEvent(RawKeyEvent event) {
@@ -96,7 +99,5 @@ class _RawKeyboardListenerState extends State<RawKeyboardListener> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return config.child;
-  }
+  Widget build(BuildContext context) => config.child;
 }

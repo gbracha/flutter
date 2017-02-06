@@ -4,6 +4,7 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -92,7 +93,11 @@ class GalleryDrawer extends StatelessWidget {
     this.timeDilation,
     this.onTimeDilationChanged,
     this.showPerformanceOverlay,
-    this.onShowPerformanceOverlayChanged
+    this.onShowPerformanceOverlayChanged,
+    this.checkerboardRasterCacheImages,
+    this.onCheckerboardRasterCacheImagesChanged,
+    this.onPlatformChanged,
+    this.onSendFeedback,
   }) : super(key: key) {
     assert(onThemeChanged != null);
     assert(onTimeDilationChanged != null);
@@ -107,6 +112,13 @@ class GalleryDrawer extends StatelessWidget {
   final bool showPerformanceOverlay;
   final ValueChanged<bool> onShowPerformanceOverlayChanged;
 
+  final bool checkerboardRasterCacheImages;
+  final ValueChanged<bool> onCheckerboardRasterCacheImagesChanged;
+
+  final ValueChanged<TargetPlatform> onPlatformChanged;
+
+  final VoidCallback onSendFeedback;
+
   @override
   Widget build(BuildContext context) {
     final ThemeData themeData = Theme.of(context);
@@ -119,7 +131,7 @@ class GalleryDrawer extends StatelessWidget {
       selected: useLightTheme,
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text('Light')),
+          new Expanded(child: new Text('Light')),
           new Radio<bool>(
             value: true,
             groupValue: useLightTheme,
@@ -135,11 +147,45 @@ class GalleryDrawer extends StatelessWidget {
       selected: useLightTheme,
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text('Dark')),
+          new Expanded(child: new Text('Dark')),
           new Radio<bool>(
             value: false,
             groupValue: useLightTheme,
             onChanged: onThemeChanged
+          )
+        ]
+      )
+    );
+
+    final Widget mountainViewItem = new DrawerItem(
+      // on iOS, we don't want to show an Android phone icon
+      icon: new Icon(defaultTargetPlatform == TargetPlatform.iOS ? Icons.star : Icons.phone_android),
+      onPressed: () { onPlatformChanged(TargetPlatform.android); },
+      selected: Theme.of(context).platform == TargetPlatform.android,
+      child: new Row(
+        children: <Widget>[
+          new Expanded(child: new Text('Android')),
+          new Radio<TargetPlatform>(
+            value: TargetPlatform.android,
+            groupValue: Theme.of(context).platform,
+            onChanged: onPlatformChanged,
+          )
+        ]
+      )
+    );
+
+    final Widget cupertinoItem = new DrawerItem(
+      // on iOS, we don't want to show the iPhone icon
+      icon: new Icon(defaultTargetPlatform == TargetPlatform.iOS ? Icons.star_border : Icons.phone_iphone),
+      onPressed: () { onPlatformChanged(TargetPlatform.iOS); },
+      selected: Theme.of(context).platform == TargetPlatform.iOS,
+      child: new Row(
+        children: <Widget>[
+          new Expanded(child: new Text('iOS')),
+          new Radio<TargetPlatform>(
+            value: TargetPlatform.iOS,
+            groupValue: Theme.of(context).platform,
+            onChanged: onPlatformChanged,
           )
         ]
       )
@@ -151,7 +197,7 @@ class GalleryDrawer extends StatelessWidget {
       onPressed: () { onTimeDilationChanged(timeDilation != 1.0 ? 1.0 : 20.0); },
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text('Animate Slowly')),
+          new Expanded(child: new Text('Animate Slowly')),
           new Checkbox(
             value: timeDilation != 1.0,
             onChanged: (bool value) { onTimeDilationChanged(value ? 20.0 : 1.0); }
@@ -160,12 +206,12 @@ class GalleryDrawer extends StatelessWidget {
       )
     );
 
-    final Widget fileAnIssueItem = new DrawerItem(
+    final Widget sendFeedbackItem = new DrawerItem(
       icon: new Icon(Icons.report),
-      onPressed: () {
+      onPressed: onSendFeedback ?? () {
         UrlLauncher.launch('https://github.com/flutter/flutter/issues/new');
       },
-      child: new Text('File an issue')
+      child: new Text('Send feedback'),
     );
 
     final Widget aboutItem = new AboutDrawerItem(
@@ -216,20 +262,23 @@ class GalleryDrawer extends StatelessWidget {
       lightThemeItem,
       darkThemeItem,
       new Divider(),
+      mountainViewItem,
+      cupertinoItem,
+      new Divider(),
       animateSlowlyItem,
-      // index 5, optional: Performance Overlay
-      fileAnIssueItem,
+      // index 8, optional: Performance Overlay
+      sendFeedbackItem,
       aboutItem
     ];
 
     if (onShowPerformanceOverlayChanged != null) {
-      allDrawerItems.insert(5, new DrawerItem(
+      allDrawerItems.insert(8, new DrawerItem(
         icon: new Icon(Icons.assessment),
         onPressed: () { onShowPerformanceOverlayChanged(!showPerformanceOverlay); },
         selected: showPerformanceOverlay,
         child: new Row(
           children: <Widget>[
-            new Flexible(child: new Text('Performance Overlay')),
+            new Expanded(child: new Text('Performance Overlay')),
             new Checkbox(
               value: showPerformanceOverlay,
               onChanged: (bool value) { onShowPerformanceOverlayChanged(!showPerformanceOverlay); }
@@ -239,6 +288,23 @@ class GalleryDrawer extends StatelessWidget {
       ));
     }
 
-    return new Drawer(child: new Block(children: allDrawerItems));
+    if (onCheckerboardRasterCacheImagesChanged != null) {
+      allDrawerItems.insert(8, new DrawerItem(
+        icon: new Icon(Icons.assessment),
+        onPressed: () { onCheckerboardRasterCacheImagesChanged(!checkerboardRasterCacheImages); },
+        selected: checkerboardRasterCacheImages,
+        child: new Row(
+          children: <Widget>[
+            new Expanded(child: new Text('Checkerboard Raster Cache Images')),
+            new Checkbox(
+              value: checkerboardRasterCacheImages,
+              onChanged: (bool value) { onCheckerboardRasterCacheImagesChanged(!checkerboardRasterCacheImages); }
+            )
+          ]
+        )
+      ));
+    }
+
+    return new Drawer(child: new ListView(children: allDrawerItems));
   }
 }

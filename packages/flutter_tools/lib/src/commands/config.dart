@@ -5,6 +5,7 @@
 import 'dart:async';
 
 import '../globals.dart';
+import '../usage.dart';
 import '../runner/flutter_command.dart';
 
 class ConfigCommand extends FlutterCommand {
@@ -46,7 +47,7 @@ class ConfigCommand extends FlutterCommand {
   String get usagePath => null;
 
   @override
-  Future<int> runCommand() async {
+  Future<Null> runCommand() async {
     if (argResults.wasParsed('analytics')) {
       bool value = argResults['analytics'];
       flutterUsage.enabled = value;
@@ -61,8 +62,6 @@ class ConfigCommand extends FlutterCommand {
 
     if (argResults.arguments.isEmpty)
       printStatus(usage);
-
-    return 0;
   }
 
   void _updateConfig(String keyName, String keyValue) {

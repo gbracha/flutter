@@ -2,19 +2,18 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:meta/meta.dart';
 
 import 'basic.dart';
 import 'container.dart';
-import 'editable.dart';
+import 'editable_text.dart';
 import 'framework.dart';
 import 'gesture_detector.dart';
 import 'overlay.dart';
 import 'transitions.dart';
 
-// TODO(mpcomplete): Need one for [collapsed].
 /// Which type of selection handle to be displayed.
 ///
 /// With mixed-direction text, both handles may be the same type. Examples:
@@ -43,6 +42,12 @@ enum TextSelectionHandleType {
 /// [start] handle always moves the [start]/[baseOffset] of the selection.
 enum _TextSelectionHandlePosition { start, end }
 
+/// Signature for reporting changes to the selection component of an
+/// [InputValue] for the purposes of a [TextSelectionOverlay]. The [caretRect]
+/// argument gives the location of the caret in the coordinate space of the
+/// [RenderBox] given by the [TextSelectionOverlay.renderObject].
+///
+/// Used by [TextSelectionOverlay.onSelectionOverlayChanged].
 typedef void TextSelectionOverlayChanged(InputValue value, Rect caretRect);
 
 /// An interface for manipulating the selection, to be used by the implementor
@@ -109,7 +114,7 @@ class TextSelectionOverlay implements TextSelectionDelegate {
   // TODO(mpcomplete): what if the renderObject is removed or replaced, or
   // moves? Not sure what cases I need to handle, or how to handle them.
   /// The editable line in which the selected text is being displayed.
-  final RenderEditableLine renderObject;
+  final RenderEditable renderObject;
 
   /// Called when the the selection changes.
   ///
@@ -301,7 +306,7 @@ class _TextSelectionHandleOverlay extends StatefulWidget {
 
   final TextSelection selection;
   final _TextSelectionHandlePosition position;
-  final RenderEditableLine renderObject;
+  final RenderEditable renderObject;
   final ValueChanged<TextSelection> onSelectionHandleChanged;
   final VoidCallback onSelectionHandleTapped;
   final TextSelectionControls selectionControls;
@@ -396,13 +401,13 @@ class _TextSelectionHandleOverlayState extends State<_TextSelectionHandleOverlay
     if (config.selection.isCollapsed)
       return TextSelectionHandleType.collapsed;
 
+    assert(endpoint.direction != null);
     switch (endpoint.direction) {
       case TextDirection.ltr:
         return ltrType;
       case TextDirection.rtl:
         return rtlType;
     }
-    assert(endpoint.direction != null);
     return null;
   }
 }

@@ -16,6 +16,8 @@ import 'version.dart';
 
 const String _kFlutterUA = 'UA-67589403-6';
 
+Usage get flutterUsage => Usage.instance;
+
 class Usage {
   /// Create a new Usage instance; [versionOverride] is used for testing.
   Usage({ String settingsName: 'flutter', String versionOverride }) {
@@ -37,7 +39,7 @@ class Usage {
   }
 
   /// Returns [Usage] active in the current app context.
-  static Usage get instance => context[Usage] ?? (context[Usage] = new Usage());
+  static Usage get instance => context[Usage];
 
   Analytics _analytics;
 
@@ -83,7 +85,18 @@ class Usage {
 
   void sendException(dynamic exception, StackTrace trace) {
     if (!suppressAnalytics)
-      _analytics.sendException('${exception.runtimeType}; ${sanitizeStacktrace(trace)}');
+      _analytics.sendException(_shorten('${exception.runtimeType}; ${sanitizeStacktrace(trace)}'));
+  }
+
+  /// Shorten the exception information that is sent to Google Analytics
+  /// to get more information because Google Analytics truncates this to 100 char.
+  String _shorten(String text) {
+    /// TODO(danrubel) Gather more information about https://github.com/flutter/flutter/issues/5137
+    /// remove this code once that issue is resolved.
+    const String prefix = 'FileSystemException; dart:io/file_impl.dart 807 _RandomAccessFile.writeFromSync dart:io/stdio.dart ';
+    if (text.startsWith(prefix))
+      text = 'FSE:807 ' + text.substring(prefix.length);
+    return text;
   }
 
   /// Fires whenever analytics data is sent over the network; public for testing.
@@ -91,11 +104,11 @@ class Usage {
 
   /// Returns when the last analytics event has been sent, or after a fixed
   /// (short) delay, whichever is less.
-  Future<Null> ensureAnalyticsSent() {
+  Future<Null> ensureAnalyticsSent() async {
     // TODO(devoncarew): This may delay tool exit and could cause some analytics
     // events to not be reported. Perhaps we could send the analytics pings
     // out-of-process from flutter_tools?
-    return _analytics.waitForLastPing(timeout: new Duration(milliseconds: 250));
+    await _analytics.waitForLastPing(timeout: new Duration(milliseconds: 250));
   }
 
   void printUsage() {

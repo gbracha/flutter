@@ -4,11 +4,11 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
 import '../base/common.dart';
+import '../base/file_system.dart';
 import '../base/utils.dart';
 import '../build_info.dart';
 import '../cache.dart';
@@ -46,23 +46,25 @@ class TraceCommand extends FlutterCommand {
     'with --start and later with --stop.';
 
   @override
-  Future<int> verifyThenRunCommand() async {
-    if (!commandValidator())
-      return 1;
+  Future<Null> verifyThenRunCommand() async {
+    commandValidator();
     return super.verifyThenRunCommand();
   }
 
   @override
-  Future<int> runCommand() async {
+  Future<Null> runCommand() async {
     int observatoryPort = int.parse(argResults['debug-port']);
+
+    // TODO(danrubel): this will break if we move to the new observatory URL
+    // See https://github.com/flutter/flutter/issues/7038
+    Uri observatoryUri = Uri.parse('http://127.0.0.1:$observatoryPort');
 
     Tracing tracing;
 
     try {
-      tracing = await Tracing.connect(observatoryPort);
+      tracing = await Tracing.connect(observatoryUri);
     } catch (error) {
-      printError('Error connecting to observatory: $error');
-      return 1;
+      throwToolExit('Error connecting to observatory: $error');
     }
 
     Cache.releaseLockEarly();
@@ -81,8 +83,6 @@ class TraceCommand extends FlutterCommand {
     } else {
       await tracing.startTracing();
     }
-
-    return 0;
   }
 
   Future<Null> _stopTracing(Tracing tracing) async {
@@ -90,9 +90,9 @@ class TraceCommand extends FlutterCommand {
     File localFile;
 
     if (argResults['out'] != null) {
-      localFile = new File(argResults['out']);
+      localFile = fs.file(argResults['out']);
     } else {
-      localFile = getUniqueFile(Directory.current, 'trace', 'json');
+      localFile = getUniqueFile(fs.currentDirectory, 'trace', 'json');
     }
 
     await localFile.writeAsString(JSON.encode(timeline));
@@ -104,8 +104,8 @@ class TraceCommand extends FlutterCommand {
 class Tracing {
   Tracing(this.vmService);
 
-  static Future<Tracing> connect(int port) {
-    return VMService.connect(port).then((VMService observatory) => new Tracing(observatory));
+  static Future<Tracing> connect(Uri uri) {
+    return VMService.connect(uri).then((VMService observatory) => new Tracing(observatory));
   }
 
   final VMService vmService;
@@ -161,7 +161,7 @@ class Tracing {
 /// store it to build/start_up_info.json.
 Future<Null> downloadStartupTrace(VMService observatory) async {
   String traceInfoFilePath = path.join(getBuildDirectory(), 'start_up_info.json');
-  File traceInfoFile = new File(traceInfoFilePath);
+  File traceInfoFile = fs.file(traceInfoFilePath);
 
   // Delete old startup data, if any.
   if (await traceInfoFile.exists())

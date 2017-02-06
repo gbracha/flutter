@@ -2,11 +2,10 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
-
 import 'package:mustache/mustache.dart' as mustache;
 import 'package:path/path.dart' as path;
 
+import 'base/file_system.dart';
 import 'cache.dart';
 import 'globals.dart';
 
@@ -60,8 +59,12 @@ class Template {
 
   Map<String /* relative */, String /* absolute source */> _templateFilePaths;
 
-  int render(Directory destination, Map<String, dynamic> context,
-      { bool overwriteExisting: true }) {
+  int render(
+    Directory destination,
+    Map<String, dynamic> context, {
+    bool overwriteExisting: true,
+    String projectName
+  }) {
     destination.createSync(recursive: true);
     int fileCount = 0;
 
@@ -72,7 +75,9 @@ class Template {
           .join(destinationDirPath, relativeDestPath)
           .replaceAll(_kCopyTemplateExtension, '')
           .replaceAll(_kTemplateExtension, '');
-      File finalDestinationFile = new File(finalDestinationPath);
+      if (projectName != null)
+        finalDestinationPath = finalDestinationPath.replaceAll('projectName', projectName);
+      File finalDestinationFile = fs.file(finalDestinationPath);
       String relativePathForLogging = path.relative(finalDestinationFile.path);
 
       // Step 1: Check if the file needs to be overwritten.
@@ -93,7 +98,7 @@ class Template {
       fileCount++;
 
       finalDestinationFile.createSync(recursive: true);
-      File sourceFile = new File(absoluteSrcPath);
+      File sourceFile = fs.file(absoluteSrcPath);
 
       // Step 2: If the absolute paths ends with a 'copy.tmpl', this file does
       //         not need mustache rendering but needs to be directly copied.
@@ -129,5 +134,5 @@ class Template {
 Directory _templateDirectoryInPackage(String name) {
   String templatesDir = path.join(Cache.flutterRoot,
       'packages', 'flutter_tools', 'templates');
-  return new Directory(path.join(templatesDir, name));
+  return fs.directory(path.join(templatesDir, name));
 }

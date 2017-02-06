@@ -37,6 +37,8 @@ export 'package:flutter/gestures.dart' show
 ///
 /// The `recognizer` argument is the gesture recognizer that currently occupies
 /// the slot for which a gesture recognizer is being created.
+///
+/// Used by [RawGestureDetector.gestures].
 typedef GestureRecognizer GestureRecognizerFactory(GestureRecognizer recognizer);
 
 /// A widget that detects gestures.
@@ -380,16 +382,12 @@ class RawGestureDetectorState extends State<RawGestureDetector> {
   /// the gesture detector should be enabled.
   void replaceGestureRecognizers(Map<Type, GestureRecognizerFactory> gestures) {
     assert(() {
-      // TODO kgiesing This assert will trigger if the owner of the current
-      // tree is different from the owner assigned to the renderer instance.
-      // Once elements have a notion of owners this assertion can be written
-      // more clearly.
-      if (!RendererBinding.instance.pipelineOwner.debugDoingLayout) {
+      if (!context.findRenderObject().owner.debugDoingLayout) {
         throw new FlutterError(
           'Unexpected call to replaceGestureRecognizers() method of RawGestureDetectorState.\n'
           'The replaceGestureRecognizers() method can only be called during the layout phase. '
-          'To set the gesture recognisers at other times, trigger a new build using setState() '
-          'and provide the new gesture recognisers as constructor arguments to the corresponding '
+          'To set the gesture recognizers at other times, trigger a new build using setState() '
+          'and provide the new gesture recognizers as constructor arguments to the corresponding '
           'RawGestureDetector or GestureDetector object.'
         );
       }
@@ -398,7 +396,7 @@ class RawGestureDetectorState extends State<RawGestureDetector> {
     _syncAll(gestures);
     if (!config.excludeFromSemantics) {
       RenderSemanticsGestureHandler semanticsGestureHandler = context.findRenderObject();
-      context.visitChildElements((RenderObjectElement element) {
+      context.visitChildElements((Element element) {
         _GestureSemantics widget = element.widget;
         widget._updateHandlers(semanticsGestureHandler, _recognizers);
       });
@@ -456,7 +454,7 @@ class RawGestureDetectorState extends State<RawGestureDetector> {
     if (_recognizers == null) {
       description.add('DISPOSED');
     } else {
-      List<String> gestures = _recognizers.values.map/*<String>*/((GestureRecognizer recognizer) => recognizer.toStringShort()).toList();
+      List<String> gestures = _recognizers.values.map<String>((GestureRecognizer recognizer) => recognizer.toStringShort()).toList();
       if (gestures.isEmpty)
         gestures.add('<none>');
       description.add('gestures: ${gestures.join(", ")}');
@@ -511,7 +509,7 @@ class _GestureSemantics extends SingleChildRenderObjectWidget {
         if (recognizer.onUpdate != null)
           recognizer.onUpdate(updateDetails);
         if (recognizer.onEnd != null)
-          recognizer.onEnd(new DragEndDetails());
+          recognizer.onEnd(new DragEndDetails(primaryVelocity: 0.0));
         return;
       }
     }
@@ -527,7 +525,6 @@ class _GestureSemantics extends SingleChildRenderObjectWidget {
         return;
       }
     }
-    assert(false);
   }
 
   void _handleVerticalDragUpdate(DragUpdateDetails updateDetails) {
@@ -539,7 +536,7 @@ class _GestureSemantics extends SingleChildRenderObjectWidget {
         if (recognizer.onUpdate != null)
           recognizer.onUpdate(updateDetails);
         if (recognizer.onEnd != null)
-          recognizer.onEnd(new DragEndDetails());
+          recognizer.onEnd(new DragEndDetails(primaryVelocity: 0.0));
         return;
       }
     }
@@ -555,7 +552,6 @@ class _GestureSemantics extends SingleChildRenderObjectWidget {
         return;
       }
     }
-    assert(false);
   }
 
   @override

@@ -5,7 +5,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:meta/meta.dart';
 
 import 'platform_messages.dart';
 
@@ -17,6 +16,7 @@ import 'platform_messages.dart';
 /// See also:
 ///
 ///  * [RawKeyEventDataAndroid]
+ //  * [RawKeyEventDataFuchsia]
 ///  * [RawKeyEvent]
 ///  * [RawKeyDownEvent]
 ///  * [RawKeyUpEvent]
@@ -29,7 +29,7 @@ abstract class RawKeyEventData {
 /// Platform-specific key event data for Android.
 ///
 /// This object contains information about key events obtained from Android's
-/// KeyEvent interface.
+/// `KeyEvent` interface.
 class RawKeyEventDataAndroid extends RawKeyEventData {
   /// Creates a key event data structure specific for Android.
   ///
@@ -57,6 +57,37 @@ class RawKeyEventDataAndroid extends RawKeyEventData {
 
   /// See <https://developer.android.com/reference/android/view/KeyEvent.html#getMetaState()>
   final int metaState;
+}
+
+/// Platform-specific key event data for Fuchsia.
+///
+/// This object contains information about key events obtained from Fuchsia's
+/// `KeyData` interface.
+class RawKeyEventDataFuchsia extends RawKeyEventData {
+  /// Creates a key event data structure specific for Android.
+  ///
+  /// The [hidUsage] and [codePoint] arguments must not be null.
+  const RawKeyEventDataFuchsia({
+    this.hidUsage: 0,
+    this.codePoint: 0,
+    this.modifiers: 0,
+  });
+
+  /// The USB HID usage.
+  ///
+  /// See <http://www.usb.org/developers/hidpage/Hut1_12v2.pdf>
+  final int hidUsage;
+
+  /// The Unicode code point represented by the key event, if any.
+  ///
+  /// If there is no Unicode code point, this value is zero.
+  final int codePoint;
+
+  /// The modifiers that we present when the key event occured.
+  ///
+  /// See <https://fuchsia.googlesource.com/mozart/+/master/services/input/input_event_constants.fidl>
+  /// for the numerical values of the modifiers.
+  final int modifiers;
 }
 
 /// Base class for raw key events.
@@ -96,7 +127,7 @@ class RawKeyUpEvent extends RawKeyEvent {
   }) : super(data: data);
 }
 
-RawKeyEvent _toRawKeyEvent(dynamic message) {
+RawKeyEvent _toRawKeyEvent(Map<String, dynamic> message) {
   RawKeyEventData data;
 
   String keymap = message['keymap'];
@@ -110,7 +141,16 @@ RawKeyEvent _toRawKeyEvent(dynamic message) {
         metaState: message['metaState'] ?? 0,
       );
       break;
+    case 'fuchsia':
+      data = new RawKeyEventDataFuchsia(
+        hidUsage: message['hidUsage'] ?? 0,
+        codePoint: message['codePoint'] ?? 0,
+        modifiers: message['modifiers'] ?? 0,
+      );
+      break;
     default:
+      // We don't yet implement raw key events on iOS, but we don't hit this
+      // exception because the engine never sends us these messages.
       throw new FlutterError('Unknown keymap for key events: $keymap');
   }
 
@@ -120,14 +160,15 @@ RawKeyEvent _toRawKeyEvent(dynamic message) {
       return new RawKeyDownEvent(data: data);
     case 'keyup':
       return new RawKeyUpEvent(data: data);
+    default:
+      throw new FlutterError('Unknown key event type: $type');
   }
-  throw new FlutterError('Unknown key event type: $type');
 }
 
 /// An interface for listening to raw key events.
 ///
 /// Raw key events pass through as much information as possible from the
-/// underlying platform's key events, which makes they provide a high level of
+/// underlying platform's key events, which makes them provide a high level of
 /// fidelity but a low level of portability.
 ///
 /// A [RawKeyboard] is useful for listening to raw key events and hardware

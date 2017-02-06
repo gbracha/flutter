@@ -4,8 +4,10 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
+import 'file_system.dart';
+import 'io.dart';
+import 'process_manager.dart';
 import '../globals.dart';
 
 typedef String StringConverter(String string);
@@ -14,13 +16,23 @@ typedef Future<dynamic> ShutdownHook();
 // TODO(ianh): We have way too many ways to run subprocesses in this project.
 
 List<ShutdownHook> _shutdownHooks = <ShutdownHook>[];
+bool _shutdownHooksRunning = false;
 void addShutdownHook(ShutdownHook shutdownHook) {
+  assert(!_shutdownHooksRunning);
   _shutdownHooks.add(shutdownHook);
 }
 
 Future<Null> runShutdownHooks() async {
-  for (ShutdownHook shutdownHook in _shutdownHooks)
-    await shutdownHook();
+  List<ShutdownHook> hooks = new List<ShutdownHook>.from(_shutdownHooks);
+  _shutdownHooks.clear();
+  _shutdownHooksRunning = true;
+  try {
+    for (ShutdownHook shutdownHook in hooks)
+      await shutdownHook();
+  } finally {
+    _shutdownHooksRunning = false;
+  }
+  assert(_shutdownHooks.isEmpty);
 }
 
 Map<String, String> _environment(bool allowReentrantFlutter, [Map<String, String> environment]) {
@@ -42,11 +54,8 @@ Future<Process> runCommand(List<String> cmd, {
   Map<String, String> environment
 }) async {
   _traceCommand(cmd, workingDirectory: workingDirectory);
-  String executable = cmd[0];
-  List<String> arguments = cmd.length > 1 ? cmd.sublist(1) : <String>[];
-  Process process = await Process.start(
-    executable,
-    arguments,
+  Process process = await processManager.start(
+    cmd,
     workingDirectory: workingDirectory,
     environment: _environment(allowReentrantFlutter, environment)
   );
@@ -98,7 +107,7 @@ Future<int> runCommandAndStreamOutput(List<String> cmd, {
 
   // Wait for stdout to be fully processed
   // because process.exitCode may complete first causing flaky tests.
-  await subscription.asFuture();
+  await subscription.asFuture<Null>();
   subscription.cancel();
 
   return await process.exitCode;
@@ -108,15 +117,15 @@ Future<Null> runAndKill(List<String> cmd, Duration timeout) {
   Future<Process> proc = runDetached(cmd);
   return new Future<Null>.delayed(timeout, () async {
     printTrace('Intentionally killing ${cmd[0]}');
-    Process.killPid((await proc).pid);
+    processManager.killPid((await proc).pid);
   });
 }
 
 Future<Process> runDetached(List<String> cmd) {
   _traceCommand(cmd);
-  Future<Process> proc = Process.start(
-    cmd[0], cmd.getRange(1, cmd.length).toList(),
-    mode: ProcessStartMode.DETACHED
+  Future<Process> proc = processManager.start(
+    cmd,
+    mode: ProcessStartMode.DETACHED,
   );
   return proc;
 }
@@ -126,11 +135,10 @@ Future<RunResult> runAsync(List<String> cmd, {
   bool allowReentrantFlutter: false
 }) async {
   _traceCommand(cmd, workingDirectory: workingDirectory);
-  ProcessResult results = await Process.run(
-    cmd[0],
-    cmd.getRange(1, cmd.length).toList(),
+  ProcessResult results = await processManager.run(
+    cmd,
     workingDirectory: workingDirectory,
-    environment: _environment(allowReentrantFlutter)
+    environment: _environment(allowReentrantFlutter),
   );
   RunResult runResults = new RunResult(results);
   printTrace(runResults.toString());
@@ -140,7 +148,7 @@ Future<RunResult> runAsync(List<String> cmd, {
 bool exitsHappy(List<String> cli) {
   _traceCommand(cli);
   try {
-    return Process.runSync(cli.first, cli.sublist(1)).exitCode == 0;
+    return processManager.runSync(cli).exitCode == 0;
   } catch (error) {
     return false;
   }
@@ -151,15 +159,27 @@ bool exitsHappy(List<String> cli) {
 /// Throws an error if cmd exits with a non-zero value.
 String runCheckedSync(List<String> cmd, {
   String workingDirectory,
-  bool allowReentrantFlutter: false
+  bool allowReentrantFlutter: false,
+  bool hideStdout: false,
 }) {
   return _runWithLoggingSync(
     cmd,
     workingDirectory: workingDirectory,
     allowReentrantFlutter: allowReentrantFlutter,
+    hideStdout: hideStdout,
     checked: true,
-    noisyErrors: true
+    noisyErrors: true,
   );
+}
+
+/// Run cmd and return stdout on success.
+///
+/// Throws the standard error output if cmd exits with a non-zero value.
+String runSyncAndThrowStdErrOnError(List<String> cmd) {
+  return _runWithLoggingSync(cmd,
+                             checked: true,
+                             throwStandardErrorOnError: true,
+                             hideStdout: true);
 }
 
 /// Run cmd and return stdout.
@@ -179,26 +199,27 @@ void _traceCommand(List<String> args, { String workingDirectory }) {
   if (workingDirectory == null)
     printTrace(argsText);
   else
-    printTrace("[$workingDirectory${Platform.pathSeparator}] $argsText");
+    printTrace("[$workingDirectory${fs.pathSeparator}] $argsText");
 }
 
 String _runWithLoggingSync(List<String> cmd, {
   bool checked: false,
   bool noisyErrors: false,
+  bool throwStandardErrorOnError: false,
   String workingDirectory,
-  bool allowReentrantFlutter: false
+  bool allowReentrantFlutter: false,
+  bool hideStdout: false,
 }) {
   _traceCommand(cmd, workingDirectory: workingDirectory);
-  ProcessResult results = Process.runSync(
-    cmd[0],
-    cmd.getRange(1, cmd.length).toList(),
+  ProcessResult results = processManager.runSync(
+    cmd,
     workingDirectory: workingDirectory,
-    environment: _environment(allowReentrantFlutter)
+    environment: _environment(allowReentrantFlutter),
   );
 
   printTrace('Exit code ${results.exitCode} from: ${cmd.join(' ')}');
 
-  if (results.stdout.isNotEmpty) {
+  if (results.stdout.isNotEmpty && !hideStdout) {
     if (results.exitCode != 0 && noisyErrors)
       printStatus(results.stdout.trim());
     else
@@ -212,6 +233,9 @@ String _runWithLoggingSync(List<String> cmd, {
       else
         printTrace(results.stderr.trim());
     }
+
+    if (throwStandardErrorOnError)
+      throw results.stderr.trim();
 
     if (checked)
       throw 'Exit code ${results.exitCode} from: ${cmd.join(' ')}';

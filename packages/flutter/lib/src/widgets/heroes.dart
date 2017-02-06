@@ -4,7 +4,6 @@
 
 import 'dart:collection';
 
-import 'package:meta/meta.dart';
 import 'package:flutter/foundation.dart';
 
 import 'basic.dart';
@@ -180,7 +179,7 @@ class _HeroState extends State<Hero> implements _HeroHandle {
     assert(mounted);
     final RenderBox renderObject = context.findRenderObject();
     assert(renderObject != null);
-    assert(!renderObject.needsLayout);
+    assert(!renderObject.debugNeedsLayout);
     assert(renderObject.hasSize);
     if (_placeholderSize == null) {
       // We are a "from" hero, about to depart on a quest.
@@ -433,7 +432,7 @@ class _HeroParty {
   }
 
   void setAnimation(Animation<double> animation) {
-    assert(animation != null || _heroes.length == 0);
+    assert(animation != null || _heroes.isEmpty);
     if (animation != _currentAnimation) {
       _clearCurrentAnimation();
       _currentAnimation = animation;
@@ -494,7 +493,7 @@ class HeroController extends NavigatorObserver {
   void didPush(Route<dynamic> route, Route<dynamic> previousRoute) {
     assert(navigator != null);
     assert(route != null);
-    if (route is PageRoute<dynamic>) {
+    if (_questsEnabled && route is PageRoute<dynamic>) {
       assert(route.animation != null);
       if (previousRoute is PageRoute<dynamic>) // could be null
         _from = previousRoute;
@@ -508,7 +507,7 @@ class HeroController extends NavigatorObserver {
   void didPop(Route<dynamic> route, Route<dynamic> previousRoute) {
     assert(navigator != null);
     assert(route != null);
-    if (route is PageRoute<dynamic>) {
+    if (_questsEnabled && route is PageRoute<dynamic>) {
       assert(route.animation != null);
       if (route.animation.status != AnimationStatus.dismissed && previousRoute is PageRoute<dynamic>) {
         _from = route;
@@ -533,9 +532,11 @@ class HeroController extends NavigatorObserver {
   }
 
   void _checkForHeroQuest() {
-    if (_from != null && _to != null && _from != _to && _questsEnabled) {
+    assert(_questsEnabled);
+    if (_from != null && _to != null && _from != _to) {
       assert(_animation != null);
       _to.offstage = _to.animation.status != AnimationStatus.completed;
+      _questsEnabled = false;
       WidgetsBinding.instance.addPostFrameCallback(_updateQuest);
     } else {
       // this isn't a valid quest
@@ -572,6 +573,7 @@ class HeroController extends NavigatorObserver {
   }
 
   void _updateQuest(Duration timeStamp) {
+    assert(!_questsEnabled);
     if (navigator == null) {
       // The navigator was removed before this end-of-frame callback was called.
       _clearPendingHeroQuest();
@@ -612,5 +614,6 @@ class HeroController extends NavigatorObserver {
     _from = null;
     _to = null;
     _animation = null;
+    _questsEnabled = true;
   }
 }

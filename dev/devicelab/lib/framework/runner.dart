@@ -28,7 +28,7 @@ Future<Map<String, dynamic>> runTask(String taskName, { bool silent: false }) as
   if (!file(taskExecutable).existsSync())
     throw 'Executable Dart file not found: $taskExecutable';
 
-  int vmServicePort = await _findAvailablePort();
+  int vmServicePort = await findAvailablePort();
   Process runner = await startProcess(dartBin, <String>[
     '--enable-vm-service=$vmServicePort',
     '--no-pause-isolates-on-exit',
@@ -37,7 +37,7 @@ Future<Map<String, dynamic>> runTask(String taskName, { bool silent: false }) as
 
   bool runnerFinished = false;
 
-  runner.exitCode.then((_) {
+  runner.exitCode.whenComplete(() {
     runnerFinished = true;
   });
 
@@ -59,7 +59,7 @@ Future<Map<String, dynamic>> runTask(String taskName, { bool silent: false }) as
 
   String waitingFor = 'connection';
   try {
-    VMIsolate isolate = await _connectToRunnerIsolate(vmServicePort);
+    VMIsolateRef isolate = await _connectToRunnerIsolate(vmServicePort);
     waitingFor = 'task completion';
     Map<String, dynamic> taskResult =
         await isolate.invokeExtension('ext.cocoonRunTask').timeout(taskTimeoutWithGracePeriod);
@@ -80,7 +80,7 @@ Future<Map<String, dynamic>> runTask(String taskName, { bool silent: false }) as
   }
 }
 
-Future<VMIsolate> _connectToRunnerIsolate(int vmServicePort) async {
+Future<VMIsolateRef> _connectToRunnerIsolate(int vmServicePort) async {
   String url = 'ws://localhost:$vmServicePort/ws';
   DateTime started = new DateTime.now();
 
@@ -99,7 +99,7 @@ Future<VMIsolate> _connectToRunnerIsolate(int vmServicePort) async {
       // Look up the isolate.
       VMServiceClient client = new VMServiceClient.connect(url);
       VM vm = await client.getVM();
-      VMIsolate isolate = vm.isolates.single;
+      VMIsolateRef isolate = vm.isolates.single;
       String response = await isolate.invokeExtension('ext.cocoonRunnerReady');
       if (response != 'ready') throw 'not ready yet';
       return isolate;
@@ -115,20 +115,6 @@ Future<VMIsolate> _connectToRunnerIsolate(int vmServicePort) async {
       const Duration pauseBetweenRetries = const Duration(milliseconds: 200);
       print('Will retry in $pauseBetweenRetries.');
       await new Future<Null>.delayed(pauseBetweenRetries);
-    }
-  }
-}
-
-Future<int> _findAvailablePort() async {
-  int port = 20000;
-  while (true) {
-    try {
-      ServerSocket socket =
-          await ServerSocket.bind(InternetAddress.LOOPBACK_IP_V4, port);
-      await socket.close();
-      return port;
-    } catch (_) {
-      port++;
     }
   }
 }

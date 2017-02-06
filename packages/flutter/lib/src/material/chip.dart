@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'colors.dart';
@@ -33,7 +34,7 @@ const TextStyle _kLabelStyle = const TextStyle(
 /// See also:
 ///
 ///  * [CircleAvatar]
-///  * <https://www.google.com/design/spec/components/chips.html>
+///  * <https://material.google.com/components/chips.html>
 class Chip extends StatelessWidget {
   /// Creates a material design chip.
   ///
@@ -42,8 +43,8 @@ class Chip extends StatelessWidget {
   const Chip({
     Key key,
     this.avatar,
-    this.label,
-    this.onDeleted
+    @required this.label,
+    this.onDeleted,
   }) : super(key: key);
 
   /// A widget to display prior to the chip's label.
@@ -95,7 +96,7 @@ class Chip extends StatelessWidget {
           message: 'Delete "$label"',
           child: new Container(
             padding: const EdgeInsets.symmetric(horizontal: 4.0),
-            child: new Icon(
+            child: const Icon(
               Icons.cancel,
               size: 18.0,
               color: Colors.black54

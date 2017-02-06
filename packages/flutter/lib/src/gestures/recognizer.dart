@@ -6,15 +6,22 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:ui' show Point, Offset;
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import 'arena.dart';
 import 'binding.dart';
 import 'constants.dart';
 import 'events.dart';
 import 'pointer_router.dart';
+import 'team.dart';
 
 export 'pointer_router.dart' show PointerRouter;
+
+/// Generic signature for callbacks passed to
+/// [GestureRecognizer.invokeCallback]. This allows the
+/// [GestureRecognizer.invokeCallback] mechanism to be generically used with
+/// anonymous functions that return objects of particular types.
+typedef T RecognizerCallback<T>();
 
 /// The base class that all GestureRecognizers should inherit from.
 ///
@@ -40,7 +47,7 @@ abstract class GestureRecognizer extends GestureArenaMember {
   ///
   /// This method is called by the owner of this gesture recognizer
   /// when the object is no longer needed (e.g. when a gesture
-  /// recogniser is being unregistered from a [GestureDetector], the
+  /// recognizer is being unregistered from a [GestureDetector], the
   /// GestureDetector widget calls this method).
   @mustCallSuper
   void dispose() { }
@@ -48,6 +55,29 @@ abstract class GestureRecognizer extends GestureArenaMember {
   /// Returns a very short pretty description of the gesture that the
   /// recognizer looks for, like 'tap' or 'horizontal drag'.
   String toStringShort() => toString();
+
+  /// Invoke a callback provided by the application, catching and logging any
+  /// exceptions.
+  @protected
+  T invokeCallback<T>(String name, RecognizerCallback<T> callback) {
+    T result;
+    try {
+      result = callback();
+    } catch (exception, stack) {
+      FlutterError.reportError(new FlutterErrorDetails(
+        exception: exception,
+        stack: stack,
+        library: 'gesture',
+        context: 'while handling a gesture',
+        informationCollector: (StringBuffer information) {
+          information.writeln('Handler: $name');
+          information.writeln('Recognizer:');
+          information.writeln('  $this');
+        }
+      ));
+    }
+    return result;
+  }
 }
 
 /// Base class for gesture recognizers that can only recognize one
@@ -99,6 +129,31 @@ abstract class OneSequenceGestureRecognizer extends GestureRecognizer {
     super.dispose();
   }
 
+  /// The team that this recognizer belongs to, if any.
+  ///
+  /// If [team] is null, this recognizer competes directly in the
+  /// [GestureArenaManager] to recognize a sequence of pointer events as a
+  /// gesture. If [team] is non-null, this recognizer competes in the arena in
+  /// a group with other recognizers on the same team.
+  ///
+  /// A recognizer can be assigned to a team only when it is not participating
+  /// in the arena. For example, a common time to assign a recognizer to a team
+  /// is shortly after creating the recognizer.
+  GestureArenaTeam get team => _team;
+  GestureArenaTeam _team;
+  set team(GestureArenaTeam value) {
+    assert(_entries.isEmpty);
+    assert(_trackedPointers.isEmpty);
+    assert(_team == null);
+    _team = value;
+  }
+
+  GestureArenaEntry _addPointerToArena(int pointer) {
+    if (_team != null)
+      return _team.add(pointer, this);
+    return GestureBinding.instance.gestureArena.add(pointer, this);
+  }
+
   /// Causes events related to the given pointer ID to be routed to this recognizer.
   ///
   /// The pointer events are delivered to [handleEvent].
@@ -109,7 +164,7 @@ abstract class OneSequenceGestureRecognizer extends GestureRecognizer {
     GestureBinding.instance.pointerRouter.addRoute(pointer, handleEvent);
     _trackedPointers.add(pointer);
     assert(!_entries.containsValue(pointer));
-    _entries[pointer] = GestureBinding.instance.gestureArena.add(pointer, this);
+    _entries[pointer] = _addPointerToArena(pointer);
   }
 
   /// Stops events related to the given pointer ID from being routed to this recognizer.
@@ -153,7 +208,7 @@ enum GestureRecognizerState {
   /// been accepted definitively.
   possible,
 
-  /// Further pointer events cannot cause this recognizer to recognise the
+  /// Further pointer events cannot cause this recognizer to recognize the
   /// gesture until the recognizer returns to the [ready] state (typically when
   /// all the pointers the recognizer is tracking are removed from the screen).
   defunct,

@@ -3,10 +3,10 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:path/path.dart' as path;
 
+import '../base/file_system.dart';
 import '../base/logger.dart';
 import '../base/net.dart';
 import '../cache.dart';
@@ -18,7 +18,7 @@ class UpdatePackagesCommand extends FlutterCommand {
   UpdatePackagesCommand({ this.hidden: false }) {
     argParser.addFlag(
       'upgrade',
-      help: 'Run "pub upgrade" rather than "pub get".',
+      help: 'Ignores pubspec.lock and retrieves newer versions of packages.',
       defaultsTo: false
     );
   }
@@ -36,36 +36,29 @@ class UpdatePackagesCommand extends FlutterCommand {
     Status status = logger.startProgress("Downloading lcov data for package:flutter...");
     final List<int> data = await fetchUrl(Uri.parse('https://storage.googleapis.com/flutter_infra/flutter/coverage/lcov.info'));
     final String coverageDir = path.join(Cache.flutterRoot, 'packages/flutter/coverage');
-    new File(path.join(coverageDir, 'lcov.base.info'))
+    fs.file(path.join(coverageDir, 'lcov.base.info'))
       ..createSync(recursive: true)
       ..writeAsBytesSync(data, flush: true);
-    new File(path.join(coverageDir, 'lcov.info'))
+    fs.file(path.join(coverageDir, 'lcov.info'))
       ..createSync(recursive: true)
       ..writeAsBytesSync(data, flush: true);
-    status.stop(showElapsedTime: true);
+    status.stop();
   }
 
   @override
-  Future<int> runCommand() async {
-    try {
-      final Stopwatch timer = new Stopwatch()..start();
-      int count = 0;
-      final bool upgrade = argResults['upgrade'];
+  Future<Null> runCommand() async {
+    final Stopwatch timer = new Stopwatch()..start();
+    int count = 0;
+    final bool upgrade = argResults['upgrade'];
 
-      for (Directory dir in runner.getRepoPackages()) {
-        int code = await pubGet(directory: dir.path, upgrade: upgrade, checkLastModified: false);
-        if (code != 0)
-          throw code;
-        count++;
-      }
-
-      await _downloadCoverageData();
-
-      final double seconds = timer.elapsedMilliseconds / 1000.0;
-      printStatus('\nRan \'pub\' $count time${count == 1 ? "" : "s"} and fetched coverage data in ${seconds.toStringAsFixed(1)}s.');
-      return 0;
-    } on int catch (code) {
-      return code;
+    for (Directory dir in runner.getRepoPackages()) {
+      await pubGet(directory: dir.path, upgrade: upgrade, checkLastModified: false);
+      count++;
     }
+
+    await _downloadCoverageData();
+
+    final double seconds = timer.elapsedMilliseconds / 1000.0;
+    printStatus('\nRan \'pub\' $count time${count == 1 ? "" : "s"} and fetched coverage data in ${seconds.toStringAsFixed(1)}s.');
   }
 }

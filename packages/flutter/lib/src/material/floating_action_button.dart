@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'colors.dart';
 import 'icon_theme_data.dart';
@@ -14,7 +14,7 @@ import 'theme.dart';
 import 'tooltip.dart';
 
 // TODO(eseidel): This needs to change based on device size?
-// http://www.google.com/design/spec/layout/metrics-keylines.html#metrics-keylines-keylines-spacing
+// http://material.google.com/layout/metrics-keylines.html#metrics-keylines-keylines-spacing
 const double _kSize = 56.0;
 const double _kSizeMini = 40.0;
 final Object _kDefaultHeroTag = new Object();
@@ -29,15 +29,15 @@ final Object _kDefaultHeroTag = new Object();
 /// buttons should be used for positive actions such as "create", "share", or
 /// "navigate".
 ///
-/// If the [onPressed] callback is not specified or null, then the button will
-/// be disabled and will not react to touch.
+/// If the [onPressed] callback is null, then the button will be disabled and
+/// will not react to touch.
 ///
 /// See also:
 ///
 ///  * [Scaffold]
 ///  * [RaisedButton]
 ///  * [FlatButton]
-///  * <https://www.google.com/design/spec/components/buttons-floating-action-button.html>
+///  * <https://material.google.com/components/buttons-floating-action-button.html>
 class FloatingActionButton extends StatefulWidget {
   /// Creates a floating action button.
   ///
@@ -81,9 +81,16 @@ class FloatingActionButton extends StatefulWidget {
   /// The z-coordinate at which to place this button.
   ///
   /// The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9, 12, 16, 24
+  ///
+  /// Defaults to 6, the appropriate elevation for floating action buttons.
   final int elevation;
 
   /// The z-coordinate at which to place this button when the user is touching the button.
+  ///
+  /// The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9, 12, 16, 24
+  ///
+  /// Defaults to 12, the appropriate elevation for floating action buttons
+  /// while they are being touched.
   final int highlightElevation;
 
   /// Controls the size of this button.
@@ -113,7 +120,7 @@ class _FloatingActionButtonState extends State<FloatingActionButton> {
     if (materialColor == null) {
       final ThemeData themeData = Theme.of(context);
       materialColor = themeData.accentColor;
-      iconColor = themeData.accentColorBrightness == Brightness.dark ? Colors.white : Colors.black;
+      iconColor = themeData.accentIconTheme.color;
     }
 
     Widget result = new Center(

@@ -4,8 +4,8 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'debug.dart';
 import 'icon.dart';
@@ -25,8 +25,8 @@ import 'tooltip.dart';
 /// Icon buttons are commonly used in the [AppBar.actions] field, but they can
 /// be used in many other places as well.
 ///
-/// If the [onPressed] callback is not specified or null, then the button will
-/// be disabled, will not react to touch.
+/// If the [onPressed] callback is null, then the button will be disabled and
+/// will not react to touch.
 ///
 /// Requires one of its ancestors to be a [Material] widget.
 ///
@@ -62,6 +62,13 @@ class IconButton extends StatelessWidget {
   /// The size of the icon inside the button.
   ///
   /// This property must not be null. It defaults to 24.0.
+  ///
+  /// The size given here is passed down to the widget in the [icon] property
+  /// via an [IconTheme]. Setting the size here instead of in, for example, the
+  /// [Icon.size] property allows the [IconButton] to size the splash area to
+  /// fit the [Icon]. If you were to set the size of the [Icon] using
+  /// [Icon.size] instead, then the [IconButton] would default to 24.0 and then
+  /// the [Icon] itself would likely get clipped.
   final double size;
 
   /// The padding around the button's icon. The entire padded icon will react
@@ -77,9 +84,9 @@ class IconButton extends StatelessWidget {
 
   /// The icon to display inside the button.
   ///
-  /// The size and color of the icon is configured automatically using an
-  /// [IconTheme] and therefore does not need to be explicitly given in the
-  /// icon widget.
+  /// The [size] and [color] of the icon is configured automatically based on
+  /// the properties of _this_ widget using an [IconTheme] and therefore should
+  /// not be explicitly given in the icon widget.
   ///
   /// This property must not be null.
   ///
@@ -92,6 +99,14 @@ class IconButton extends StatelessWidget {
   /// The icon is enabled if [onPressed] is not null.
   ///
   /// See also [disabledColor].
+  ///
+  /// ```dart
+  ///  new IconButton(
+  ///    color: Colors.blue[500],
+  ///    onPressed: _handleTap,
+  ///    icon: Icons.widgets,
+  ///  ),
+  /// ```
   final Color color;
 
   /// The color to use for the icon inside the button, if the icon is disabled.
@@ -128,7 +143,7 @@ class IconButton extends StatelessWidget {
         maxHeight: size,
         child: new ConstrainedBox(
           constraints: new BoxConstraints.loose(
-            new Size.square(math.max(size, InkSplash.defaultRadius * 2.0))
+            new Size.square(math.max(size, Material.defaultSplashRadius * 2.0))
           ),
           child: new Align(
             alignment: alignment,
@@ -153,7 +168,7 @@ class IconButton extends StatelessWidget {
     return new InkResponse(
       onTap: onPressed,
       child: result,
-      radius: math.max(size, InkSplash.defaultRadius),
+      radius: math.max(size, Material.defaultSplashRadius),
     );
   }
 

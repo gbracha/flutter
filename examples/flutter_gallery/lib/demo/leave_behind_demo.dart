@@ -39,7 +39,6 @@ class LeaveBehindDemo extends StatefulWidget {
 
 class LeaveBehindDemoState extends State<LeaveBehindDemo> {
   static final GlobalKey<ScaffoldState> _scaffoldKey = new GlobalKey<ScaffoldState>();
-  static final GlobalKey<ScrollableState> _scrollableKey = new GlobalKey<ScrollableState>();
   DismissDirection _dismissDirection = DismissDirection.horizontal;
   List<LeaveBehindItem> leaveBehindItems;
 
@@ -132,9 +131,8 @@ class LeaveBehindDemoState extends State<LeaveBehindDemo> {
   Widget build(BuildContext context) {
     return new Scaffold(
       key: _scaffoldKey,
-      scrollableKey: _scrollableKey,
       appBar: new AppBar(
-        title: new Text('Swipe items to dismiss'),
+        title: new Text('Swipe to dismiss'),
         actions: <Widget>[
           new PopupMenuButton<LeaveBehindDemoAction>(
             onSelected: handleDemoAction,
@@ -163,8 +161,7 @@ class LeaveBehindDemoState extends State<LeaveBehindDemo> {
           )
         ]
       ),
-      body: new Block(
-        scrollableKey: _scrollableKey,
+      body: new ListView(
         children: leaveBehindItems.map(buildItem).toList()
       )
     );

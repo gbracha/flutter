@@ -11,7 +11,7 @@ void main() {
     bool isExpanded;
 
     await tester.pumpWidget(
-      new ScrollableViewport(
+      new SingleChildScrollView(
         child: new ExpansionPanelList(
           expansionCallback: (int _index, bool _isExpanded) {
             index = _index;
@@ -22,7 +22,7 @@ void main() {
               headerBuilder: (BuildContext context, bool isExpanded) {
                 return new Text(isExpanded ? 'B' : 'A');
               },
-              body: new SizedBox(height: 100.0)
+              body: const SizedBox(height: 100.0)
             )
           ]
         )
@@ -42,7 +42,7 @@ void main() {
 
     // now expand the child panel
     await tester.pumpWidget(
-      new ScrollableViewport(
+      new SingleChildScrollView(
         child: new ExpansionPanelList(
           expansionCallback: (int _index, bool _isExpanded) {
             index = _index;
@@ -53,7 +53,7 @@ void main() {
               headerBuilder: (BuildContext context, bool isExpanded) {
                 return new Text(isExpanded ? 'B' : 'A');
               },
-              body: new SizedBox(height: 100.0),
+              body: const SizedBox(height: 100.0),
               isExpanded: true // this is the addition
             )
           ]

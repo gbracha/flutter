@@ -62,13 +62,13 @@ class TextSpan {
 
   /// The text contained in the span.
   ///
-  /// If both [text] and [children] are non-null, the text will preceed the
+  /// If both [text] and [children] are non-null, the text will precede the
   /// children.
   final String text;
 
   /// Additional spans to include as children.
   ///
-  /// If both [text] and [children] are non-null, the text will preceed the
+  /// If both [text] and [children] are non-null, the text will precede the
   /// children.
   ///
   /// Modifying the list after the [TextSpan] has been created is not
@@ -158,6 +158,24 @@ class TextSpan {
       return true;
     });
     return buffer.toString();
+  }
+
+  /// Returns the UTF-16 code unit at the given index in the flattened string.
+  /// Returns null if the index is out of bounds.
+  int codeUnitAt(int index) {
+    if (index < 0)
+      return null;
+    int offset = 0;
+    int result;
+    visitTextSpan((TextSpan span) {
+      if (index - offset < span.text.length) {
+        result = span.text.codeUnitAt(index - offset);
+        return false;
+      }
+      offset += span.text.length;
+      return true;
+    });
+    return result;
   }
 
   @override

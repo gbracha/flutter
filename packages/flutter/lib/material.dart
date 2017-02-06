@@ -7,7 +7,7 @@
 /// To use, import `package:flutter/material.dart`.
 ///
 /// See
-/// [www.google.com/design/spec/material-design](https://www.google.com/design/spec/material-design/introduction.html)
+/// [material.google.com](https://material.google.com/)
 /// for an introduction to Material Design.
 library material;
 
@@ -28,6 +28,7 @@ export 'src/material/constants.dart';
 export 'src/material/data_table.dart';
 export 'src/material/data_table_source.dart';
 export 'src/material/date_picker.dart';
+export 'src/material/debug.dart';
 export 'src/material/dialog.dart';
 export 'src/material/divider.dart';
 export 'src/material/drawer.dart';
@@ -48,6 +49,8 @@ export 'src/material/icon_theme.dart';
 export 'src/material/icon_theme_data.dart';
 export 'src/material/icons.dart';
 export 'src/material/image_icon.dart';
+export 'src/material/ink_highlight.dart';
+export 'src/material/ink_splash.dart';
 export 'src/material/ink_well.dart';
 export 'src/material/input.dart';
 export 'src/material/list.dart';
@@ -70,6 +73,7 @@ export 'src/material/snack_bar.dart';
 export 'src/material/stepper.dart';
 export 'src/material/switch.dart';
 export 'src/material/tabs.dart';
+export 'src/material/tab_controller.dart';
 export 'src/material/theme.dart';
 export 'src/material/theme_data.dart';
 export 'src/material/time_picker.dart';

@@ -6,20 +6,311 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' as ui show window;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/physics.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:meta/meta.dart';
 
+import 'banner.dart';
 import 'basic.dart';
 import 'clamp_overscrolls.dart';
+import 'debug.dart';
 import 'framework.dart';
 import 'gesture_detector.dart';
 import 'notification_listener.dart';
 import 'page_storage.dart';
 import 'scroll_behavior.dart';
 import 'scroll_configuration.dart';
+import 'scroll_notification.dart';
+import 'scroll_position.dart';
 import 'ticker_provider.dart';
+import 'viewport.dart';
+
+export 'package:flutter/physics.dart' show Tolerance;
+
+typedef Widget ViewportBuilder(BuildContext context, ViewportOffset position);
+
+class Scrollable2 extends StatefulWidget {
+  Scrollable2({
+    Key key,
+    this.axisDirection: AxisDirection.down,
+    this.physics,
+    @required this.viewportBuilder,
+  }) : super (key: key) {
+    assert(axisDirection != null);
+    assert(viewportBuilder != null);
+  }
+
+  final AxisDirection axisDirection;
+
+  final ScrollPhysics physics;
+
+  final ViewportBuilder viewportBuilder;
+
+  Axis get axis => axisDirectionToAxis(axisDirection);
+
+  @override
+  Scrollable2State createState() => new Scrollable2State();
+
+  @override
+  void debugFillDescription(List<String> description) {
+    super.debugFillDescription(description);
+    description.add('$axisDirection');
+    if (physics != null)
+      description.add('physics: $physics');
+  }
+
+  /// The state from the closest instance of this class that encloses the given context.
+  ///
+  /// Typical usage is as follows:
+  ///
+  /// ```dart
+  /// Scrollable2State scrollable = Scrollable2.of(context);
+  /// ```
+  static Scrollable2State of(BuildContext context) {
+    return context.ancestorStateOfType(const TypeMatcher<Scrollable2State>());
+  }
+
+  /// Scrolls the closest enclosing scrollable to make the given context visible.
+  static Future<Null> ensureVisible(BuildContext context, {
+    double alignment: 0.0,
+    Duration duration: Duration.ZERO,
+    Curve curve: Curves.ease,
+  }) {
+    final List<Future<Null>> futures = <Future<Null>>[];
+
+    Scrollable2State scrollable = Scrollable2.of(context);
+    while (scrollable != null) {
+      futures.add(scrollable.position.ensureVisible(context.findRenderObject(), alignment: alignment));
+      context = scrollable.context;
+      scrollable = Scrollable2.of(context);
+    }
+
+    if (futures.isEmpty || duration == Duration.ZERO)
+      return new Future<Null>.value();
+    if (futures.length == 1)
+      return futures.first;
+    return Future.wait<Null>(futures);
+  }
+}
+
+/// State object for a [Scrollable2] widget.
+///
+/// To manipulate a [Scrollable2] widget's scroll position, use the object
+/// obtained from the [position] property.
+///
+/// To be informed of when a [Scrollable2] widget is scrolling, use a
+/// [NotificationListener] to listen for [ScrollNotification2] notifications.
+///
+/// This class is not intended to be subclassed. To specialize the behavior of a
+/// [Scrollable2], provide it with a [ScrollPhysics].
+class Scrollable2State extends State<Scrollable2> with TickerProviderStateMixin
+    implements AbstractScrollState {
+  /// The controller for this [Scrollable2] widget's viewport position.
+  ///
+  /// To control what kind of [ScrollPosition] is created for a [Scrollable2],
+  /// provide it with custom [ScrollPhysics] that creates the appropriate
+  /// [ScrollPosition] controller in its [ScrollPhysics.createScrollPosition]
+  /// method.
+  ScrollPosition get position => _position;
+  ScrollPosition _position;
+
+  ScrollBehavior2 _configuration;
+
+  // only call this from places that will definitely trigger a rebuild
+  void _updatePosition() {
+    _configuration = ScrollConfiguration2.of(context);
+    ScrollPhysics physics = _configuration.getScrollPhysics(context);
+    if (config.physics != null)
+      physics = config.physics.applyTo(physics);
+    final ScrollPosition oldPosition = position;
+    _position = physics.createScrollPosition(physics, this, oldPosition);
+    assert(position != null);
+    if (oldPosition != null) {
+      // It's important that we not do this until after the viewport has had a
+      // chance to unregister its listeners from the old position. So, schedule
+      // a microtask to do it.
+      scheduleMicrotask(oldPosition.dispose);
+    }
+  }
+
+  @override
+  void dependenciesChanged() {
+    super.dependenciesChanged();
+    _updatePosition();
+  }
+
+  bool _shouldUpdatePosition(Scrollable2 oldConfig) {
+    if (config.physics == oldConfig.physics)
+      return false;
+    if ((config.physics == null) != (oldConfig.physics == null))
+      return true;
+    return config.physics.runtimeType != oldConfig.physics.runtimeType
+        || config.physics.shouldUpdateScrollPosition(oldConfig.physics);
+  }
+
+  @override
+  void didUpdateConfig(Scrollable2 oldConfig) {
+    super.didUpdateConfig(oldConfig);
+    if (_shouldUpdatePosition(oldConfig))
+      _updatePosition();
+  }
+
+  @override
+  void dispose() {
+    position.dispose();
+    super.dispose();
+  }
+
+
+  // GESTURE RECOGNITION AND POINTER IGNORING
+
+  final GlobalKey<RawGestureDetectorState> _gestureDetectorKey = new GlobalKey<RawGestureDetectorState>();
+  final GlobalKey _ignorePointerKey = new GlobalKey();
+
+  // This field is set during layout, and then reused until the next time it is set.
+  Map<Type, GestureRecognizerFactory> _gestureRecognizers = const <Type, GestureRecognizerFactory>{};
+  bool _shouldIgnorePointer = false;
+
+  bool _lastCanDrag;
+  Axis _lastAxisDirection;
+
+  @override
+  @protected
+  void setCanDrag(bool canDrag) {
+    if (canDrag == _lastCanDrag && (!canDrag || config.axis == _lastAxisDirection))
+      return;
+    if (!canDrag) {
+      _gestureRecognizers = const <Type, GestureRecognizerFactory>{};
+    } else {
+      switch (config.axis) {
+        case Axis.vertical:
+          _gestureRecognizers = <Type, GestureRecognizerFactory>{
+            VerticalDragGestureRecognizer: (VerticalDragGestureRecognizer recognizer) {  // ignore: map_value_type_not_assignable, https://github.com/flutter/flutter/issues/7173
+              return (recognizer ??= new VerticalDragGestureRecognizer())
+                ..onDown = _handleDragDown
+                ..onStart = _handleDragStart
+                ..onUpdate = _handleDragUpdate
+                ..onEnd = _handleDragEnd;
+            }
+          };
+          break;
+        case Axis.horizontal:
+          _gestureRecognizers = <Type, GestureRecognizerFactory>{
+            HorizontalDragGestureRecognizer: (HorizontalDragGestureRecognizer recognizer) {  // ignore: map_value_type_not_assignable, https://github.com/flutter/flutter/issues/7173
+              return (recognizer ??= new HorizontalDragGestureRecognizer())
+                ..onDown = _handleDragDown
+                ..onStart = _handleDragStart
+                ..onUpdate = _handleDragUpdate
+                ..onEnd = _handleDragEnd;
+            }
+          };
+          break;
+      }
+    }
+    _lastCanDrag = canDrag;
+    _lastAxisDirection = config.axis;
+    if (_gestureDetectorKey.currentState != null)
+      _gestureDetectorKey.currentState.replaceGestureRecognizers(_gestureRecognizers);
+  }
+
+  @override
+  TickerProvider get vsync => this;
+
+  @override
+  @protected
+  void setIgnorePointer(bool value) {
+    if (_shouldIgnorePointer == value)
+      return;
+    _shouldIgnorePointer = value;
+    if (_ignorePointerKey.currentContext != null) {
+      RenderIgnorePointer renderBox = _ignorePointerKey.currentContext.findRenderObject();
+      renderBox.ignoring = _shouldIgnorePointer;
+    }
+  }
+
+  @override
+  @protected
+  void didEndDrag() {
+    _drag = null;
+  }
+
+  @override
+  @protected
+  void dispatchNotification(Notification notification) {
+    assert(mounted);
+    notification.dispatch(_gestureDetectorKey.currentContext);
+  }
+
+  // TOUCH HANDLERS
+
+  DragScrollActivity _drag;
+
+  bool get _reverseDirection {
+    assert(config.axisDirection != null);
+    switch (config.axisDirection) {
+      case AxisDirection.up:
+      case AxisDirection.left:
+        return true;
+      case AxisDirection.down:
+      case AxisDirection.right:
+        return false;
+    }
+    return null;
+  }
+
+  void _handleDragDown(DragDownDetails details) {
+    assert(_drag == null);
+    position.touched();
+  }
+
+  void _handleDragStart(DragStartDetails details) {
+    assert(_drag == null);
+    _drag = position.beginDragActivity(details);
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    assert(_drag != null);
+    _drag.update(details, reverse: _reverseDirection);
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    assert(_drag != null);
+    _drag.end(details, reverse: _reverseDirection);
+    assert(_drag == null);
+  }
+
+
+  // DESCRIPTION
+
+  @override
+  Widget build(BuildContext context) {
+    assert(position != null);
+    // TODO(ianh): Having all these global keys is sad.
+    Widget result = new RawGestureDetector(
+      key: _gestureDetectorKey,
+      gestures: _gestureRecognizers,
+      behavior: HitTestBehavior.opaque,
+      child: new IgnorePointer(
+        key: _ignorePointerKey,
+        ignoring: _shouldIgnorePointer,
+        child: config.viewportBuilder(context, position),
+      ),
+    );
+    return _configuration.buildViewportChrome(context, result, config.axisDirection);
+  }
+
+  @override
+  void debugFillDescription(List<String> description) {
+    super.debugFillDescription(description);
+    description.add('position: $position');
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// DELETE EVERYTHING BELOW THIS LINE WHEN REMOVING LEGACY SCROLLING CODE
+////////////////////////////////////////////////////////////////////////////////
 
 /// Identifies one or both limits of a [Scrollable] in terms of its scrollDirection.
 enum ScrollableEdge {
@@ -47,6 +338,8 @@ final Tolerance kPixelScrollTolerance = new Tolerance(
 );
 
 /// Signature for building a widget based on [ScrollableState].
+///
+/// Used by [Scrollable.builder].
 typedef Widget ScrollBuilder(BuildContext context, ScrollableState state);
 
 /// Signature for callbacks that receive a scroll offset.
@@ -60,6 +353,9 @@ typedef void ScrollListener(double scrollOffset);
 typedef double SnapOffsetCallback(double scrollOffset, Size containerSize);
 
 /// A base class for scrollable widgets.
+///
+/// If you have a list of widgets and want them to be able to scroll if there is
+/// insufficient room, consider using [Block].
 ///
 /// Commonly used classes that are based on Scrollable include [ScrollableList],
 /// [ScrollableGrid], and [ScrollableViewport].
@@ -152,6 +448,12 @@ class Scrollable extends StatefulWidget {
   final ScrollBuilder builder;
 
   /// The state from the closest instance of this class that encloses the given context.
+  ///
+  /// Typical usage is as follows:
+  ///
+  /// ```dart
+  /// ScrollableState scrollable = Scrollable.of(context);
+  /// ```
   static ScrollableState of(BuildContext context) {
     return context.ancestorStateOfType(const TypeMatcher<ScrollableState>());
   }
@@ -196,7 +498,7 @@ class Scrollable extends StatefulWidget {
     double scrollOffsetDelta;
     if (targetMin < scrollableMin) {
       if (targetMax > scrollableMax) {
-        // The target is to big to fit inside the scrollable. The best we can do
+        // The target is too big to fit inside the scrollable. The best we can do
         // is to center the target.
         double targetCenter = (targetMin + targetMax) / 2.0;
         double scrollableCenter = (scrollableMin + scrollableMax) / 2.0;
@@ -513,6 +815,11 @@ class ScrollableState<T extends Scrollable> extends State<T> with SingleTickerPr
   /// If there are no in-progress scrolling physics, this function scrolls to
   /// the given offset instead.
   void didUpdateScrollBehavior(double newScrollOffset) {
+    _setStateMaybeDuringBuild(() {
+      _contentExtent = scrollBehavior.contentExtent;
+      _containerExtent = scrollBehavior.containerExtent;
+    });
+
     // This does not call setState, because if anything below actually
     // changes our build, it will itself independently trigger a frame.
     assert(_controller.isAnimating || _simulation == null);
@@ -536,8 +843,6 @@ class ScrollableState<T extends Scrollable> extends State<T> with SingleTickerPr
   ///     [didUpdateScrollBehavior].
   ///  3. Updating this object's gesture detector with [updateGestureDetector].
   void handleExtentsChanged(double contentExtent, double containerExtent) {
-    _contentExtent = contentExtent;
-    _containerExtent = containerExtent;
     didUpdateScrollBehavior(scrollBehavior.updateExtents(
       contentExtent: contentExtent,
       containerExtent: containerExtent,
@@ -656,7 +961,7 @@ class ScrollableState<T extends Scrollable> extends State<T> with SingleTickerPr
       config.onScroll(_scrollOffset);
   }
 
-  void _handleDragDown(_) {
+  void _handleDragDown(DragDownDetails details) {
     setState(() {
       _stop();
     });
@@ -700,7 +1005,7 @@ class ScrollableState<T extends Scrollable> extends State<T> with SingleTickerPr
 
   void _handleDragEnd(DragEndDetails details) {
     final double scrollVelocity = pixelDeltaToScrollOffset(details.velocity.pixelsPerSecond);
-    fling(scrollVelocity).then((Null _) {
+    fling(scrollVelocity).then<Null>((Null value) {
       _endScroll(details: details);
     });
   }
@@ -753,15 +1058,24 @@ class ScrollableState<T extends Scrollable> extends State<T> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    return new RawGestureDetector(
+    Widget result = new RawGestureDetector(
       key: _gestureDetectorKey,
       gestures: buildGestureDetectors(),
       behavior: HitTestBehavior.opaque,
       child: new IgnorePointer(
         ignoring: _scrollUnderway,
-        child: buildContent(context)
-      )
+        child: buildContent(context),
+      ),
     );
+    if (debugHighlightDeprecatedWidgets) {
+      result = new Banner(
+        message: 'OLD',
+        color: const Color(0xFF009000),
+        location: BannerLocation.bottomRight,
+        child: result,
+      );
+    }
+    return result;
   }
 
   /// Fixes up the gesture detector to listen to the appropriate
@@ -910,11 +1224,11 @@ class ScrollNotification extends Notification {
 ///
 /// See also:
 ///
+///  * [Block], if your single child is a [Column].
 ///  * [ScrollableList], if you have many identically-sized children.
 ///  * [PageableList], if you have children that each take the entire screen.
 ///  * [ScrollableGrid], if your children are in a grid pattern.
 ///  * [LazyBlock], if you have many children of varying sizes.
-///  * [Block], if your single child is a [BlockBody] or a [Column].
 class ScrollableViewport extends StatelessWidget {
   /// Creates a simple scrolling widget that has a single child.
   ///
@@ -1029,7 +1343,7 @@ class ScrollableViewport extends StatelessWidget {
   }
 }
 
-/// A mashup of [ScrollableViewport] and [BlockBody].
+/// A scrolling list of variably-sized children.
 ///
 /// Useful when you have a small, fixed number of children that you wish to
 /// arrange in a block layout and that might exceed the height of its container
@@ -1040,13 +1354,14 @@ class ScrollableViewport extends StatelessWidget {
 /// or [ScrollableList] (if the children all have the same fixed height), as
 /// they avoid doing work for children that are not visible.
 ///
-/// If you have a single child, then use [ScrollableViewport] directly.
+/// This widget is implemented using [ScrollableViewport] and [BlockBody]. If
+/// you have a single child, consider using [ScrollableViewport] directly.
 ///
 /// See also:
 ///
-///  * [ScrollableViewport], if you only have one child.
+///  * [LazyBlock], if you have many children with varying heights.
 ///  * [ScrollableList], if all your children are the same height.
-///  * [LazyBlock], if you have children with varying heights.
+///  * [ScrollableViewport], if you only have one child.
 class Block extends StatelessWidget {
   /// Creates a scrollable array of children.
   Block({

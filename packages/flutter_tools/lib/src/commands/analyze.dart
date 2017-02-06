@@ -3,8 +3,8 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
+import '../base/file_system.dart';
 import '../runner/flutter_command.dart';
 import 'analyze_continuously.dart';
 import 'analyze_once.dart';
@@ -46,14 +46,14 @@ class AnalyzeCommand extends FlutterCommand {
       return false;
 
     // Or we're not in a project directory.
-    if (!new File('pubspec.yaml').existsSync())
+    if (!fs.file('pubspec.yaml').existsSync())
       return false;
 
     return super.shouldRunPub;
   }
 
   @override
-  Future<int> runCommand() {
+  Future<Null> runCommand() {
     if (argResults['watch']) {
       return new AnalyzeContinuously(argResults, runner.getRepoAnalysisEntryPoints()).analyze();
     } else {

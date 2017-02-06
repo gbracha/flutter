@@ -8,8 +8,8 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/widgets.dart';
 
-import 'colors.dart';
-import 'typography.dart';
+import 'theme.dart';
+import 'theme_data.dart';
 
 const double _kScreenEdgeMargin = 10.0;
 const Duration _kFadeDuration = const Duration(milliseconds: 200);
@@ -32,7 +32,7 @@ const Duration _kShowDuration = const Duration(milliseconds: 1500);
 ///
 /// See also:
 ///
-///  * <https://www.google.com/design/spec/components/tooltips.html>
+///  * <https://material.google.com/components/tooltips.html>
 class Tooltip extends StatefulWidget {
   /// Creates a tooltip.
   ///
@@ -47,7 +47,7 @@ class Tooltip extends StatefulWidget {
     this.padding: const EdgeInsets.symmetric(horizontal: 16.0),
     this.verticalOffset: 24.0,
     this.preferBelow: true,
-    this.child
+    this.child,
   }) : super(key: key) {
     assert(message != null);
     assert(height != null);
@@ -110,18 +110,6 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
       _removeEntry();
   }
 
-  @override
-  void didUpdateConfig(Tooltip oldConfig) {
-    super.didUpdateConfig(oldConfig);
-    if (_entry != null &&
-        (config.message != oldConfig.message ||
-         config.height != oldConfig.height ||
-         config.padding != oldConfig.padding ||
-         config.verticalOffset != oldConfig.verticalOffset ||
-         config.preferBelow != oldConfig.preferBelow))
-      _entry.markNeedsBuild();
-  }
-
   void ensureTooltipVisible() {
     if (_entry != null) {
       _timer?.cancel();
@@ -129,22 +117,24 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
       _controller.forward();
       return;  // Already visible.
     }
-    RenderBox box = context.findRenderObject();
-    Point target = box.localToGlobal(box.size.center(Point.origin));
-    _entry = new OverlayEntry(builder: (BuildContext context) {
-      return new _TooltipOverlay(
-        message: config.message,
-        height: config.height,
-        padding: config.padding,
-        animation: new CurvedAnimation(
-          parent: _controller,
-          curve: Curves.fastOutSlowIn
-        ),
-        target: target,
-        verticalOffset: config.verticalOffset,
-        preferBelow: config.preferBelow
-      );
-    });
+    final RenderBox box = context.findRenderObject();
+    final Point target = box.localToGlobal(box.size.center(Point.origin));
+    // We create this widget outside of the overlay entry's builder to prevent
+    // updated values from happening to leak into the overlay when the overlay
+    // rebuilds.
+    final Widget overlay = new _TooltipOverlay(
+      message: config.message,
+      height: config.height,
+      padding: config.padding,
+      animation: new CurvedAnimation(
+        parent: _controller,
+        curve: Curves.fastOutSlowIn
+      ),
+      target: target,
+      verticalOffset: config.verticalOffset,
+      preferBelow: config.preferBelow
+    );
+    _entry = new OverlayEntry(builder: (BuildContext context) => overlay);
     Overlay.of(context, debugRequiredFor: config).insert(_entry);
     GestureBinding.instance.pointerRouter.addGlobalRoute(_handlePointerEvent);
     _controller.forward();
@@ -191,7 +181,7 @@ class _TooltipState extends State<Tooltip> with SingleTickerProviderStateMixin {
       excludeFromSemantics: true,
       child: new Semantics(
         label: config.message,
-        child: config.child
+        child: config.child,
       )
     );
   }
@@ -265,6 +255,12 @@ class _TooltipOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ThemeData theme = Theme.of(context);
+    ThemeData darkTheme = new ThemeData(
+      brightness: Brightness.dark,
+      textTheme: theme.brightness == Brightness.dark ? theme.textTheme : theme.primaryTextTheme,
+      platform: theme.platform,
+    );
     return new Positioned.fill(
       child: new IgnorePointer(
         child: new CustomSingleChildLayout(
@@ -279,14 +275,14 @@ class _TooltipOverlay extends StatelessWidget {
               opacity: 0.9,
               child: new Container(
                 decoration: new BoxDecoration(
-                  backgroundColor: Colors.grey[700],
+                  backgroundColor: darkTheme.backgroundColor,
                   borderRadius: new BorderRadius.circular(2.0)
                 ),
                 height: height,
                 padding: padding,
                 child: new Center(
                   widthFactor: 1.0,
-                  child: new Text(message, style: Typography.white.body1)
+                  child: new Text(message, style: darkTheme.textTheme.body1)
                 )
               )
             )

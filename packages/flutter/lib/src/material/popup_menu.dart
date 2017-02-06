@@ -4,8 +4,8 @@
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'constants.dart';
 import 'divider.dart';
@@ -115,7 +115,7 @@ class PopupMenuItem<T> extends PopupMenuEntry<T> {
     Key key,
     this.value,
     this.enabled: true,
-    this.child
+    @required this.child,
   }) : super(key: key);
 
   @override
@@ -285,22 +285,22 @@ class _PopupMenu<T> extends StatelessWidget {
       ));
     }
 
-    final CurveTween opacity = new CurveTween(curve: new Interval(0.0, 1.0 / 3.0));
+    final CurveTween opacity = new CurveTween(curve: const Interval(0.0, 1.0 / 3.0));
     final CurveTween width = new CurveTween(curve: new Interval(0.0, unit));
     final CurveTween height = new CurveTween(curve: new Interval(0.0, unit * route.items.length));
 
     Widget child = new ConstrainedBox(
-      constraints: new BoxConstraints(
+      constraints: const BoxConstraints(
         minWidth: _kMenuMinWidth,
-        maxWidth: _kMenuMaxWidth
+        maxWidth: _kMenuMaxWidth,
       ),
       child: new IntrinsicWidth(
         stepWidth: _kMenuWidthStep,
-        child: new Block(
-          children: children,
+        child: new SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
             vertical: _kMenuVerticalPadding
-          )
+          ),
+          child: new BlockBody(children: children),
         )
       )
     );
@@ -317,9 +317,9 @@ class _PopupMenu<T> extends StatelessWidget {
               alignment: FractionalOffset.topRight,
               widthFactor: width.evaluate(route.animation),
               heightFactor: height.evaluate(route.animation),
-              child: child
-            )
-          )
+              child: child,
+            ),
+          ),
         );
       },
       child: child
@@ -388,7 +388,7 @@ class _PopupMenuRoute<T> extends PopupRoute<T> {
     return new CurvedAnimation(
       parent: super.createAnimation(),
       curve: Curves.linear,
-      reverseCurve: new Interval(0.0, _kMenuCloseIntervalEnd)
+      reverseCurve: const Interval(0.0, _kMenuCloseIntervalEnd)
     );
   }
 
@@ -424,21 +424,29 @@ class _PopupMenuRoute<T> extends PopupRoute<T> {
   }
 }
 
-/// Show a popup menu that contains the [items] at [position]. If [initialValue]
+/// Show a popup menu that contains the `items` at `position`. If `initialValue`
 /// is specified then the first item with a matching value will be highlighted
-/// and the value of [position] implies where the left, center point of the
-/// highlighted item should appear. If [initialValue] is not specified then position
-/// implies the menu's origin.
-Future<dynamic/*=T*/> showMenu/*<T>*/({
+/// and the value of `position` implies where the left, center point of the
+/// highlighted item should appear. If `initialValue` is not specified then
+/// `position` specifies the menu's origin.
+///
+/// The `context` argument is used to look up a [Navigator] to show the menu and
+/// a [Theme] to use for the menu.
+///
+/// The `elevation` argument specifies the z-coordinate at which to place the
+/// menu. The following elevations have defined shadows: 1, 2, 3, 4, 6, 8, 9,
+/// 12, 16, 24. The elevation defaults to 8, the appropriate elevation for popup
+/// menus.
+Future<T> showMenu<T>({
   BuildContext context,
   RelativeRect position,
-  List<PopupMenuEntry<dynamic/*=T*/>> items,
-  dynamic/*=T*/ initialValue,
+  List<PopupMenuEntry<T>> items,
+  T initialValue,
   int elevation: 8
 }) {
   assert(context != null);
-  assert(items != null && items.length > 0);
-  return Navigator.push(context, new _PopupMenuRoute<dynamic/*=T*/>(
+  assert(items != null && items.isNotEmpty);
+  return Navigator.push(context, new _PopupMenuRoute<T>(
     position: position,
     items: items,
     initialValue: initialValue,
@@ -447,11 +455,17 @@ Future<dynamic/*=T*/> showMenu/*<T>*/({
   ));
 }
 
-/// A callback that is passed the value of the PopupMenuItem that caused
-/// its menu to be dismissed.
+/// Signature for the callback invoked when a menu item is selected. The
+/// argument is the value of the [PopupMenuItem] that caused its menu to be
+/// dismissed.
+///
+/// Used by [PopupMenuButton.onSelected].
 typedef void PopupMenuItemSelected<T>(T value);
 
-/// Signature used by [PopupMenuButton] to lazily construct the items shown when the button is pressed.
+/// Signature used by [PopupMenuButton] to lazily construct the items shown when
+/// the button is pressed.
+///
+/// Used by [PopupMenuButton.itemBuilder].
 typedef List<PopupMenuEntry<T>> PopupMenuItemBuilder<T>(BuildContext context);
 
 /// Displays a menu when pressed and calls [onSelected] when the menu is dismissed
@@ -511,7 +525,7 @@ class _PopupMenuButtonState<T> extends State<PopupMenuButton<T>> {
   void showButtonMenu() {
     final RenderBox renderBox = context.findRenderObject();
     final Point topLeft = renderBox.localToGlobal(Point.origin);
-    showMenu/*<T>*/(
+    showMenu<T>(
       context: context,
       elevation: config.elevation,
       items: config.itemBuilder(context),
@@ -521,9 +535,9 @@ class _PopupMenuButtonState<T> extends State<PopupMenuButton<T>> {
         0.0, 0.0
       )
     )
-    .then((T newValue) {
+    .then<Null>((T newValue) {
       if (!mounted || newValue == null)
-        return;
+        return null;
       if (config.onSelected != null)
         config.onSelected(newValue);
     });

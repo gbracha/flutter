@@ -105,7 +105,7 @@ class StockHomeState extends State<StockHome> {
         });
         break;
       case _StockMenuItem.refresh:
-        showDialog(
+        showDialog<Null>(
           context: context,
           child: new _NotImplementedDialog()
         );
@@ -121,63 +121,65 @@ class StockHomeState extends State<StockHome> {
 
   Widget _buildDrawer(BuildContext context) {
     return new Drawer(
-      child: new Block(children: <Widget>[
-        new DrawerHeader(child: new Center(child: new Text('Stocks'))),
-        new DrawerItem(
-          icon: new Icon(Icons.assessment),
-          selected: true,
-          child: new Text('Stock List')
-        ),
-        new DrawerItem(
-          icon: new Icon(Icons.account_balance),
-          onPressed: null,
-          child: new Text('Account Balance')
-        ),
-        new DrawerItem(
-          icon: new Icon(Icons.dvr),
-          onPressed: () {
-            try {
-              debugDumpApp();
-              debugDumpRenderTree();
-              debugDumpLayerTree();
-              debugDumpSemanticsTree();
-            } catch (e, stack) {
-              debugPrint('Exception while dumping app:\n$e\n$stack');
-            }
-          },
-          child: new Text('Dump App to Console')
-        ),
-        new Divider(),
-        new DrawerItem(
-          icon: new Icon(Icons.thumb_up),
-          onPressed: () => _handleStockModeChange(StockMode.optimistic),
-          child: new Row(
-            children: <Widget>[
-              new Flexible(child: new Text('Optimistic')),
-              new Radio<StockMode>(value: StockMode.optimistic, groupValue: config.configuration.stockMode, onChanged: _handleStockModeChange)
-            ]
-          )
-        ),
-        new DrawerItem(
-          icon: new Icon(Icons.thumb_down),
-          onPressed: () => _handleStockModeChange(StockMode.pessimistic),
-          child: new Row(
-            children: <Widget>[
-              new Flexible(child: new Text('Pessimistic')),
-              new Radio<StockMode>(value: StockMode.pessimistic, groupValue: config.configuration.stockMode, onChanged: _handleStockModeChange)
-            ]
-          )
-        ),
-        new Divider(),
-        new DrawerItem(
-          icon: new Icon(Icons.settings),
-          onPressed: _handleShowSettings,
-          child: new Text('Settings')),
-        new DrawerItem(
-          icon: new Icon(Icons.help),
-          onPressed: _handleShowAbout,
-          child: new Text('About'))
-      ])
+      child: new ListView(
+        children: <Widget>[
+          new DrawerHeader(child: new Center(child: new Text('Stocks'))),
+          new DrawerItem(
+            icon: new Icon(Icons.assessment),
+            selected: true,
+            child: new Text('Stock List')
+          ),
+          new DrawerItem(
+            icon: new Icon(Icons.account_balance),
+            onPressed: null,
+            child: new Text('Account Balance')
+          ),
+          new DrawerItem(
+            icon: new Icon(Icons.dvr),
+            onPressed: () {
+              try {
+                debugDumpApp();
+                debugDumpRenderTree();
+                debugDumpLayerTree();
+                debugDumpSemanticsTree();
+              } catch (e, stack) {
+                debugPrint('Exception while dumping app:\n$e\n$stack');
+              }
+            },
+            child: new Text('Dump App to Console')
+          ),
+          new Divider(),
+          new DrawerItem(
+            icon: new Icon(Icons.thumb_up),
+            onPressed: () => _handleStockModeChange(StockMode.optimistic),
+            child: new Row(
+              children: <Widget>[
+                new Expanded(child: new Text('Optimistic')),
+                new Radio<StockMode>(value: StockMode.optimistic, groupValue: config.configuration.stockMode, onChanged: _handleStockModeChange)
+              ]
+            )
+          ),
+          new DrawerItem(
+            icon: new Icon(Icons.thumb_down),
+            onPressed: () => _handleStockModeChange(StockMode.pessimistic),
+            child: new Row(
+              children: <Widget>[
+                new Expanded(child: new Text('Pessimistic')),
+                new Radio<StockMode>(value: StockMode.pessimistic, groupValue: config.configuration.stockMode, onChanged: _handleStockModeChange)
+              ]
+            )
+          ),
+          new Divider(),
+          new DrawerItem(
+            icon: new Icon(Icons.settings),
+            onPressed: _handleShowSettings,
+            child: new Text('Settings')),
+          new DrawerItem(
+            icon: new Icon(Icons.help),
+            onPressed: _handleShowAbout,
+            child: new Text('About'))
+        ]
+      )
     );
   }
 
@@ -222,11 +224,11 @@ class StockHomeState extends State<StockHome> {
           ]
         )
       ],
-      bottom: new TabBar<StockHomeTab>(
-        labels: <StockHomeTab, TabLabel>{
-          StockHomeTab.market: new TabLabel(text: StockStrings.of(context).market()),
-          StockHomeTab.portfolio: new TabLabel(text: StockStrings.of(context).portfolio())
-        }
+      bottom: new TabBar(
+        tabs: <Widget>[
+          new Tab(text: StockStrings.of(context).market()),
+          new Tab(text: StockStrings.of(context).portfolio()),
+        ]
       )
     );
   }
@@ -267,7 +269,7 @@ class StockHomeState extends State<StockHome> {
         Navigator.pushNamed(context, '/stock/${stock.symbol}');
       },
       onShow: (Stock stock) {
-        _scaffoldKey.currentState.showBottomSheet((BuildContext context) => new StockSymbolBottomSheet(stock: stock));
+        _scaffoldKey.currentState.showBottomSheet<Null>((BuildContext context) => new StockSymbolBottomSheet(stock: stock));
       }
     );
   }
@@ -290,8 +292,7 @@ class StockHomeState extends State<StockHome> {
         onPressed: _handleSearchEnd,
         tooltip: 'Back'
       ),
-      title: new Input(
-        value: _searchQuery,
+      title: new TextField(
         autofocus: true,
         hintText: 'Search stocks',
         onChanged: _handleSearchQueryChanged
@@ -301,7 +302,7 @@ class StockHomeState extends State<StockHome> {
   }
 
   void _handleCreateCompany() {
-    showModalBottomSheet/*<Null>*/(
+    showModalBottomSheet<Null>(
       context: context,
       builder: (BuildContext context) => new _CreateCompanySheet()
     );
@@ -318,14 +319,14 @@ class StockHomeState extends State<StockHome> {
 
   @override
   Widget build(BuildContext context) {
-    return new TabBarSelection<StockHomeTab>(
-      values: <StockHomeTab>[StockHomeTab.market, StockHomeTab.portfolio],
+    return new DefaultTabController(
+      length: 2,
       child: new Scaffold(
         key: _scaffoldKey,
         appBar: _isSearching ? buildSearchBar() : buildAppBar(),
         floatingActionButton: buildFloatingActionButton(),
         drawer: _buildDrawer(context),
-        body: new TabBarView<StockHomeTab>(
+        body: new TabBarView(
           children: <Widget>[
             _buildStockTab(context, StockHomeTab.market, config.symbols),
             _buildStockTab(context, StockHomeTab.portfolio, portfolioSymbols),
@@ -336,30 +337,15 @@ class StockHomeState extends State<StockHome> {
   }
 }
 
-class _CreateCompanySheet extends StatefulWidget {
-  @override
-  _CreateCompanySheetState createState() => new _CreateCompanySheetState();
-}
-
-class _CreateCompanySheetState extends State<_CreateCompanySheet> {
-  InputValue _companyName = InputValue.empty;
-
-  void _handleCompanyNameChanged(InputValue value) {
-    setState(() {
-      _companyName = value;
-    });
-  }
-
+class _CreateCompanySheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // TODO(ianh): Fill this out.
     return new Column(
       children: <Widget>[
-        new Input(
+        new TextField(
           autofocus: true,
           hintText: 'Company Name',
-          value: _companyName,
-          onChanged: _handleCompanyNameChanged
         ),
       ]
     );

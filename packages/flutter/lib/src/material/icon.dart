@@ -12,17 +12,24 @@ import 'theme.dart';
 
 /// A material design icon.
 ///
-/// Available icons are shown on this page:
-/// <https://design.google.com/icons/>
+/// Icons are not interactive. For an interactive icon, consider [IconButton].
 ///
-/// Icons are identified by their name (as given on that page), with
-/// spaces converted to underscores, from the [Icons] class. For
-/// example, the "alarm add" icon is [Icons.alarm_add].
+/// Icons are identified by their name (as given on that page), with spaces
+/// converted to underscores, from the [Icons] class. For example, the "alarm
+/// add" icon is [Icons.alarm_add].
 ///
-/// To use this class, make sure you set `uses-material-design: true`
-/// in your project's `flutter.yaml` file. This ensures that the
-/// MaterialIcons font is included in your application. This font is
-/// used to display the icons.
+/// Available icons are shown on this page: <https://design.google.com/icons/>
+///
+/// To use this class, make sure you set `uses-material-design: true` in your
+/// project's `pubspec.yaml` file in the `flutter` section. This ensures that
+/// the MaterialIcons font is included in your application. This font is used to
+/// display the icons. For example:
+///
+/// ```yaml
+/// name: my_awesome_application
+/// flutter:
+///   uses-material-design: true
+/// ```
 ///
 /// See also:
 ///
@@ -53,6 +60,11 @@ class Icon extends StatelessWidget {
   /// Defaults to the current [IconTheme] size, if any. If there is no
   /// [IconTheme], or it does not specify an explicit size, then it defaults to
   /// 24.0.
+  ///
+  /// If this [Icon] is being placed inside an [IconButton], then use
+  /// [IconButton.size] instead, so that the [IconButton] can make the splash
+  /// area the appropriate size as well. The [IconButton] uses an [IconTheme] to
+  /// pass down the size to the [Icon].
   final double size;
 
   /// The color to use when drawing the icon.
@@ -65,11 +77,20 @@ class Icon extends StatelessWidget {
   ///
   /// The given color will be adjusted by the opacity of the current
   /// [IconTheme], if any.
+  ///
+  /// Typically, a material design color will be used, as follows:
+  ///
+  /// ```dart
+  ///  new Icon(
+  ///    icon: Icons.widgets,
+  ///    color: Colors.blue[400],
+  ///  ),
+  /// ```
   final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final IconThemeData iconTheme = IconTheme.of(context).fallback();
+    final IconThemeData iconTheme = IconTheme.of(context);
 
     final double iconSize = size ?? iconTheme.size;
 

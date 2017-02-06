@@ -6,8 +6,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/animation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'animation_tester.dart';
-
 void main() {
   setUp(() {
     WidgetsFlutterBinding.ensureInitialized();
@@ -206,17 +204,83 @@ void main() {
       duration: const Duration(milliseconds: 100),
       vsync: const TestVSync(),
     );
-    expect(controller.toString(), hasOneLineDescription);
+    expect(controller, hasOneLineDescription);
     controller.forward();
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 10));
     WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 20));
+    expect(controller, hasOneLineDescription);
     WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 30));
-    expect(controller.toString(), hasOneLineDescription);
-    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 120));
-    expect(controller.toString(), hasOneLineDescription);
+    expect(controller, hasOneLineDescription);
     controller.reverse();
-    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 20));
-    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 30));
-    expect(controller.toString(), hasOneLineDescription);
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 40));
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 50));
+    expect(controller, hasOneLineDescription);
     controller.stop();
+  });
+
+  test('velocity test - linear', () {
+    AnimationController controller = new AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: const TestVSync(),
+    );
+
+    // mid-flight
+    controller.forward();
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 0));
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 500));
+    expect(controller.velocity, inInclusiveRange(0.9, 1.1));
+
+    // edges
+    controller.forward();
+    expect(controller.velocity, inInclusiveRange(0.4, 0.6));
+    WidgetsBinding.instance.handleBeginFrame(Duration.ZERO);
+    expect(controller.velocity, inInclusiveRange(0.4, 0.6));
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 5));
+    expect(controller.velocity, inInclusiveRange(0.9, 1.1));
+
+    controller.forward(from: 0.5);
+    expect(controller.velocity, inInclusiveRange(0.4, 0.6));
+    WidgetsBinding.instance.handleBeginFrame(Duration.ZERO);
+    expect(controller.velocity, inInclusiveRange(0.4, 0.6));
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 5));
+    expect(controller.velocity, inInclusiveRange(0.9, 1.1));
+
+    // stopped
+    controller.forward(from: 1.0);
+    expect(controller.velocity, 0.0);
+    WidgetsBinding.instance.handleBeginFrame(Duration.ZERO);
+    expect(controller.velocity, 0.0);
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 500));
+    expect(controller.velocity, 0.0);
+
+    controller.forward();
+    WidgetsBinding.instance.handleBeginFrame(Duration.ZERO);
+    WidgetsBinding.instance.handleBeginFrame(const Duration(milliseconds: 1000));
+    expect(controller.velocity, 0.0);
+
+    controller.stop();
+  });
+
+  test('Disposed AnimationController toString works', () {
+    AnimationController controller = new AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: const TestVSync(),
+    );
+    controller.dispose();
+    expect(controller, hasOneLineDescription);
+  });
+
+  test('AnimationController error handling', () {
+    AnimationController controller = new AnimationController(
+      vsync: const TestVSync(),
+    );
+
+    expect(controller.forward, throwsFlutterError);
+    expect(controller.reverse, throwsFlutterError);
+    expect(() { controller.animateTo(0.5); }, throwsFlutterError);
+    expect(controller.repeat, throwsFlutterError);
+
+    controller.dispose();
+    expect(controller.dispose, throwsFlutterError);
   });
 }

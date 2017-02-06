@@ -5,8 +5,8 @@
 import 'dart:async';
 import 'dart:ui' as ui show window;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
-import 'package:meta/meta.dart';
 
 import 'banner.dart';
 import 'basic.dart';
@@ -22,6 +22,8 @@ import 'text.dart';
 import 'title.dart';
 
 /// Signature for a function that is called when the operating system changes the current locale.
+///
+/// Used by [WidgetsApp.onLocaleChanged].
 typedef Future<LocaleQueryData> LocaleChangedCallback(Locale locale);
 
 /// A convenience class that wraps a number of widgets that are commonly
@@ -41,16 +43,19 @@ class WidgetsApp extends StatefulWidget {
     @required this.onGenerateRoute,
     this.title,
     this.textStyle,
-    this.color,
-    this.navigatorObserver,
+    @required this.color,
+    this.navigatorObservers: const <NavigatorObserver>[],
     this.initialRoute,
     this.onLocaleChanged,
     this.showPerformanceOverlay: false,
+    this.checkerboardRasterCacheImages: false,
     this.showSemanticsDebugger: false,
     this.debugShowCheckedModeBanner: true
   }) : super(key: key) {
+    assert(color != null);
     assert(onGenerateRoute != null);
     assert(showPerformanceOverlay != null);
+    assert(checkerboardRasterCacheImages != null);
     assert(showSemanticsDebugger != null);
   }
 
@@ -84,6 +89,9 @@ class WidgetsApp extends StatefulWidget {
   /// https://flutter.io/debugging/#performanceoverlay
   final bool showPerformanceOverlay;
 
+  /// Checkerboards raster cache images.
+  final bool checkerboardRasterCacheImages;
+
   /// Turns on an overlay that shows the accessibility information
   /// reported by the framework.
   final bool showSemanticsDebugger;
@@ -103,13 +111,21 @@ class WidgetsApp extends StatefulWidget {
   /// representative of what will happen in release mode.
   final bool debugShowCheckedModeBanner;
 
-  /// The observer for the Navigator created for this app.
-  final NavigatorObserver navigatorObserver;
+  /// The list of observers for the [Navigator] created for this app.
+  final List<NavigatorObserver> navigatorObservers;
 
   /// If true, forces the performance overlay to be visible in all instances.
   ///
   /// Used by `showPerformanceOverlay` observatory extension.
   static bool showPerformanceOverlayOverride = false;
+
+  /// If false, prevents the debug banner from being visible.
+  ///
+  /// Used by `debugAllowBanner` observatory extension.
+  ///
+  /// This is how `flutter run` turns off the banner when you take a screen shot
+  /// with "s".
+  static bool debugAllowBannerOverride = true;
 
   @override
   _WidgetsAppState createState() => new _WidgetsAppState();
@@ -133,12 +149,15 @@ class _WidgetsAppState extends State<WidgetsApp> implements WidgetsBindingObserv
     super.dispose();
   }
 
+  // On Android: the user has pressed the back button.
   @override
-  bool didPopRoute() {
+  Future<bool> didPopRoute() async {
     assert(mounted);
     NavigatorState navigator = _navigator.currentState;
     assert(navigator != null);
-    return navigator.pop();
+    if (!await navigator.willPop())
+      return true;
+    return mounted && navigator.pop();
   }
 
   @override
@@ -152,7 +171,7 @@ class _WidgetsAppState extends State<WidgetsApp> implements WidgetsBindingObserv
   @override
   void didChangeLocale(Locale locale) {
     if (config.onLocaleChanged != null) {
-      config.onLocaleChanged(locale).then((LocaleQueryData data) {
+      config.onLocaleChanged(locale).then<Null>((LocaleQueryData data) {
         if (mounted)
           setState(() { _localeData = data; });
       });
@@ -184,7 +203,7 @@ class _WidgetsAppState extends State<WidgetsApp> implements WidgetsBindingObserv
             key: _navigator,
             initialRoute: config.initialRoute ?? ui.window.defaultRouteName,
             onGenerateRoute: config.onGenerateRoute,
-            observer: config.navigatorObserver
+            observers: config.navigatorObservers
           )
         )
       )
@@ -195,11 +214,22 @@ class _WidgetsAppState extends State<WidgetsApp> implements WidgetsBindingObserv
         child: result
       );
     }
+
+    PerformanceOverlay performanceOverlay;
+    // We need to push a performance overlay if any of the display or checkerboarding
+    // options are set.
     if (config.showPerformanceOverlay || WidgetsApp.showPerformanceOverlayOverride) {
+      performanceOverlay = new PerformanceOverlay.allEnabled(
+                  checkerboardRasterCacheImages: config.checkerboardRasterCacheImages);
+    } else if (config.checkerboardRasterCacheImages) {
+      performanceOverlay = new PerformanceOverlay(checkerboardRasterCacheImages: true);
+    }
+
+    if (performanceOverlay != null) {
       result = new Stack(
         children: <Widget>[
           result,
-          new Positioned(top: 0.0, left: 0.0, right: 0.0, child: new PerformanceOverlay.allEnabled()),
+          new Positioned(top: 0.0, left: 0.0, right: 0.0, child: performanceOverlay),
         ]
       );
     }
@@ -209,7 +239,7 @@ class _WidgetsAppState extends State<WidgetsApp> implements WidgetsBindingObserv
       );
     }
     assert(() {
-      if (config.debugShowCheckedModeBanner) {
+      if (config.debugShowCheckedModeBanner && WidgetsApp.debugAllowBannerOverride) {
         result = new CheckedModeBanner(
           child: result
         );

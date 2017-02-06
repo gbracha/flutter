@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 class TravelDestination {
   const TravelDestination({ this.assetName, this.title, this.description });
@@ -22,8 +21,8 @@ final List<TravelDestination> destinations = <TravelDestination>[
     description: const <String>[
       'Number 10',
       'Whitehaven Beach',
-      'Whitsunday Island, Whitsunday Islands'
-    ]
+      'Whitsunday Island, Whitsunday Islands',
+    ],
   ),
   const TravelDestination(
     assetName: 'packages/flutter_gallery_assets/kangaroo_valley_safari.jpg',
@@ -31,8 +30,8 @@ final List<TravelDestination> destinations = <TravelDestination>[
     description: const <String>[
       '2031 Moss Vale Road',
       'Kangaroo Valley 2577',
-      'New South Wales'
-    ]
+      'New South Wales',
+    ],
   )
 ];
 
@@ -64,23 +63,26 @@ class TravelDestinationItem extends StatelessWidget {
                   new Positioned.fill(
                     child: new Image.asset(
                       destination.assetName,
-                      fit: ImageFit.cover
-                    )
+                      fit: ImageFit.cover,
+                    ),
                   ),
                   new Positioned(
                     bottom: 16.0,
                     left: 16.0,
-                    child: new Text(destination.title,
-                      style: titleStyle,
-                      softWrap: false,
-                      overflow: TextOverflow.ellipsis
-                    )
-                  )
-                ]
-              )
+                    right: 16.0,
+                    child: new FittedBox(
+                      fit: ImageFit.scaleDown,
+                      alignment: FractionalOffset.centerLeft,
+                      child: new Text(destination.title,
+                        style: titleStyle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             // description and share/expore buttons
-            new Flexible(
+            new Expanded(
               child: new Padding(
                 padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 0.0),
                 child: new DefaultTextStyle(
@@ -94,10 +96,10 @@ class TravelDestinationItem extends StatelessWidget {
                       new Text(destination.description[0]),
                       new Text(destination.description[1]),
                       new Text(destination.description[2]),
-                    ]
-                  )
-                )
-              )
+                    ],
+                  ),
+                ),
+              ),
             ),
             // share, explore buttons
             // TODO(abarth): The theme and the bar should be part of card.
@@ -107,35 +109,32 @@ class TravelDestinationItem extends StatelessWidget {
                 children: <Widget>[
                   new FlatButton(
                     child: new Text('SHARE'),
-                    onPressed: () { /* do nothing */ }
+                    onPressed: () { /* do nothing */ },
                   ),
                   new FlatButton(
                     child: new Text('EXPLORE'),
-                    onPressed: () { /* do nothing */ }
+                    onPressed: () { /* do nothing */ },
                   ),
-                ]
-              )
+                ],
+              ),
             ),
-          ]
-        )
-      )
+          ],
+        ),
+      ),
     );
   }
 }
 
 class CardsDemo extends StatelessWidget {
-  static final GlobalKey<ScrollableState> _scrollableKey = new GlobalKey<ScrollableState>();
   static const String routeName = '/cards';
 
   @override
   Widget build(BuildContext context) {
     return new Scaffold(
-      scrollableKey: _scrollableKey,
       appBar: new AppBar(
         title: new Text('Travel stream')
       ),
-      body: new ScrollableList(
-        scrollableKey: _scrollableKey,
+      body: new ListView(
         itemExtent: TravelDestinationItem.height,
         padding: const EdgeInsets.only(top: 8.0, left: 8.0, right: 8.0),
         children: destinations.map((TravelDestination destination) {
@@ -143,8 +142,7 @@ class CardsDemo extends StatelessWidget {
             margin: const EdgeInsets.only(bottom: 8.0),
             child: new TravelDestinationItem(destination: destination)
           );
-        })
-        .toList()
+        }).toList()
       )
     );
   }

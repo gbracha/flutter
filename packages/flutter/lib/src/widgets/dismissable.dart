@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import 'basic.dart';
 import 'framework.dart';
@@ -17,7 +17,10 @@ const double _kMinFlingVelocityDelta = 400.0;
 const double _kFlingVelocityScale = 1.0 / 300.0;
 const double _kDismissThreshold = 0.4;
 
-/// Signature used by [Dismissable] to indicate that it has been dismissed in the given `direction`.
+/// Signature used by [Dismissable] to indicate that it has been dismissed in
+/// the given `direction`.
+///
+/// Used by [Dismissable.onDismissed].
 typedef void DismissDirectionCallback(DismissDirection direction);
 
 /// The direction in which a [Dismissable] can be dismissed.
@@ -70,7 +73,7 @@ class Dismissable extends StatefulWidget {
   /// according to their keys and avoids this pitfall.
   Dismissable({
     @required Key key,
-    this.child,
+    @required this.child,
     this.background,
     this.secondaryBackground,
     this.onResize,

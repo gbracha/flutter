@@ -50,16 +50,15 @@ class ComplexLayout extends StatefulWidget {
   ComplexLayoutState createState() => new ComplexLayoutState();
 
   static ComplexLayoutState of(BuildContext context) => context.ancestorStateOfType(const TypeMatcher<ComplexLayoutState>());
-
 }
 
 class FancyItemDelegate extends LazyBlockDelegate {
   @override
   Widget buildItem(BuildContext context, int index) {
     if (index % 2 == 0)
-      return new FancyImageItem(index, key: new Key('Item $index'));
+      return new FancyImageItem(index, key: new ValueKey<int>(index));
     else
-      return new FancyGalleryItem(index, key: new Key('Item $index'));
+      return new FancyGalleryItem(index, key: new ValueKey<int>(index));
   }
 
   @override
@@ -84,23 +83,23 @@ class ComplexLayoutState extends State<ComplexLayout> {
             tooltip: 'Search',
             onPressed: () {
               print('Pressed search');
-            }
+            },
           ),
           new TopBarMenu()
         ]
       ),
       body: new Column(
         children: <Widget>[
-          new Flexible(
+          new Expanded(
             child: new LazyBlock(
-              key: new Key('main-scroll'),
-              delegate: new FancyItemDelegate()
+              key: new Key('main-scroll'), // this key is used by the driver test
+              delegate: new FancyItemDelegate(),
             )
           ),
-          new BottomBar()
-        ]
+          new BottomBar(),
+        ],
       ),
-      drawer: new GalleryDrawer()
+      drawer: new GalleryDrawer(),
     );
   }
 }
@@ -339,7 +338,7 @@ class UserHeader extends StatelessWidget {
               height: 32.0
             )
           ),
-          new Flexible(
+          new Expanded(
             child: new Column(
               mainAxisAlignment: MainAxisAlignment.start,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -470,27 +469,27 @@ class ItemGalleryBox extends StatelessWidget {
 
     return new SizedBox(
       height: 200.0,
-      child: new TabBarSelection<String>(
-        values: tabNames,
+      child: new DefaultTabController(
+        length: tabNames.length,
         child: new Column(
           children: <Widget>[
-            new Flexible(
-              child: new TabBarView<String>(
+            new Expanded(
+              child: new TabBarView(
                 children: tabNames.map((String tabName) {
                   return new Container(
-                    key: new Key('Tab $index - $tabName'),
+                    key: new Key(tabName),
                     child: new Padding(
                       padding: new EdgeInsets.all(8.0),
                       child: new Card(
                         child: new Column(
                           children: <Widget>[
-                            new Flexible(
+                            new Expanded(
                               child: new Container(
                                 decoration: new BoxDecoration(
-                                  backgroundColor: Theme.of(context).primaryColor
+                                  backgroundColor: Theme.of(context).primaryColor,
                                 ),
                                 child: new Center(
-                                  child: new Text(tabName, style: Theme.of(context).textTheme.headline.copyWith(color: Colors.white))
+                                  child: new Text(tabName, style: Theme.of(context).textTheme.headline.copyWith(color: Colors.white)),
                                 )
                               )
                             ),
@@ -498,16 +497,16 @@ class ItemGalleryBox extends StatelessWidget {
                               children: <Widget>[
                                 new IconButton(
                                   icon: new Icon(Icons.share),
-                                  onPressed: () { print('Pressed share'); }
+                                  onPressed: () { print('Pressed share'); },
                                 ),
                                 new IconButton(
                                   icon: new Icon(Icons.event),
-                                  onPressed: () { print('Pressed event'); }
+                                  onPressed: () { print('Pressed event'); },
                                 ),
-                                new Flexible(
+                                new Expanded(
                                   child: new Padding(
                                     padding: new EdgeInsets.only(left: 8.0),
-                                    child: new Text('This is item $tabName')
+                                    child: new Text('This is item $tabName'),
                                   )
                                 )
                               ]
@@ -521,7 +520,7 @@ class ItemGalleryBox extends StatelessWidget {
               )
             ),
             new Container(
-              child: new TabPageSelector<String>()
+              child: new TabPageSelector()
             )
           ]
         )
@@ -589,7 +588,7 @@ class GalleryDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return new Drawer(
-      child: new Block(
+      child: new ListView(
         children: <Widget>[
           new FancyDrawerHeader(),
           new DrawerItem(
@@ -598,7 +597,7 @@ class GalleryDrawer extends StatelessWidget {
             selected: ComplexLayoutApp.of(context).lightTheme,
             child: new Row(
               children: <Widget>[
-                new Flexible(child: new Text('Light')),
+                new Expanded(child: new Text('Light')),
                 new Radio<bool>(
                   value: true,
                   groupValue: ComplexLayoutApp.of(context).lightTheme,
@@ -613,7 +612,7 @@ class GalleryDrawer extends StatelessWidget {
             selected: !ComplexLayoutApp.of(context).lightTheme,
             child: new Row(
               children: <Widget>[
-                new Flexible(child: new Text('Dark')),
+                new Expanded(child: new Text('Dark')),
                 new Radio<bool>(
                   value: false,
                   groupValue: ComplexLayoutApp.of(context).lightTheme,
@@ -629,7 +628,7 @@ class GalleryDrawer extends StatelessWidget {
             onPressed: () { ComplexLayoutApp.of(context).toggleAnimationSpeed(); },
             child: new Row(
               children: <Widget>[
-                new Flexible(child: new Text('Animate Slowly')),
+                new Expanded(child: new Text('Animate Slowly')),
                 new Checkbox(
                   value: timeDilation != 1.0,
                   onChanged: (bool value) { ComplexLayoutApp.of(context).toggleAnimationSpeed(); }

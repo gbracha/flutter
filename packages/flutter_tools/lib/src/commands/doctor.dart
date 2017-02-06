@@ -4,7 +4,7 @@
 
 import 'dart:async';
 
-import '../globals.dart';
+import '../doctor.dart';
 import '../runner/flutter_command.dart';
 
 class DoctorCommand extends FlutterCommand {
@@ -15,8 +15,7 @@ class DoctorCommand extends FlutterCommand {
   final String description = 'Show information about the installed tooling.';
 
   @override
-  Future<int> runCommand() async {
+  Future<Null> runCommand() async {
     await doctor.diagnose();
-    return 0;
   }
 }

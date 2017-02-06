@@ -17,17 +17,18 @@ analyzer:
   language:
     enableStrictCallChecks: true
     enableSuperMixins: true
-  strong-mode: true
+  strong-mode:
+    implicit-dynamic: false
   errors:
     # allow overriding fields (if they use super, ideally...)
     strong_mode_invalid_field_override: ignore
     # allow type narrowing
-    strong_mode_static_type_error: ignore
     strong_mode_down_cast_composite: ignore
     # allow having TODOs in the code
     todo: ignore
-  exclude:
-    - 'bin/**'
+  # `flutter analyze` (without `--watch`) just ignores directories
+  # that contain a .dartignore file, and this file does not have any
+  # effect on what files are actually analyzed.
 
 linter:
   rules:

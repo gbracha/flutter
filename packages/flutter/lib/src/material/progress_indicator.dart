@@ -23,7 +23,7 @@ const double _kCircularProgressIndicatorStrokeWidth = 4.0;
 ///
 /// See also:
 ///
-///  * <https://www.google.com/design/spec/components/progress-activity.html>
+///  * <https://material.google.com/components/progress-activity.html>
 abstract class ProgressIndicator extends StatefulWidget {
   /// Creates a progress indicator.
   ///
@@ -130,7 +130,7 @@ class _LinearProgressIndicatorPainter extends CustomPainter {
 /// See also:
 ///
 ///  * [CircularProgressIndicator]
-///  * <https://www.google.com/design/spec/components/progress-activity.html#progress-activity-types-of-indicators>
+///  * <https://material.google.com/components/progress-activity.html#progress-activity-types-of-indicators>
 class LinearProgressIndicator extends ProgressIndicator {
   /// Creates a linear progress indicator.
   ///
@@ -168,7 +168,7 @@ class _LinearProgressIndicatorState extends State<LinearProgressIndicator> with 
 
   Widget _buildIndicator(BuildContext context, double animationValue) {
     return new Container(
-      constraints: new BoxConstraints.tightFor(
+      constraints: const BoxConstraints.tightFor(
         width: double.INFINITY,
         height: _kLinearProgressIndicatorHeight
       ),
@@ -276,7 +276,7 @@ class _CircularProgressIndicatorPainter extends CustomPainter {
 /// See also:
 ///
 ///  * [LinearProgressIndicator]
-///  * <https://www.google.com/design/spec/components/progress-activity.html#progress-activity-types-of-indicators>
+///  * <https://material.google.com/components/progress-activity.html#progress-activity-types-of-indicators>
 class CircularProgressIndicator extends ProgressIndicator {
   /// Creates a circular progress indicator.
   ///
@@ -296,20 +296,20 @@ class CircularProgressIndicator extends ProgressIndicator {
 
 // Tweens used by circular progress indicator
 final Animatable<double> _kStrokeHeadTween = new CurveTween(
-  curve: new Interval(0.0, 0.5, curve: Curves.fastOutSlowIn)
+  curve: const Interval(0.0, 0.5, curve: Curves.fastOutSlowIn)
 ).chain(new CurveTween(
-  curve: new SawTooth(5)
+  curve: const SawTooth(5)
 ));
 
 final Animatable<double> _kStrokeTailTween = new CurveTween(
-  curve: new Interval(0.5, 1.0, curve: Curves.fastOutSlowIn)
+  curve: const Interval(0.5, 1.0, curve: Curves.fastOutSlowIn)
 ).chain(new CurveTween(
-  curve: new SawTooth(5)
+  curve: const SawTooth(5)
 ));
 
 final Animatable<int> _kStepTween = new StepTween(begin: 0, end: 5);
 
-final Animatable<double> _kRotationTween = new CurveTween(curve: new SawTooth(5));
+final Animatable<double> _kRotationTween = new CurveTween(curve: const SawTooth(5));
 
 class _CircularProgressIndicatorState extends State<CircularProgressIndicator> with SingleTickerProviderStateMixin {
   AnimationController _controller;
@@ -331,9 +331,9 @@ class _CircularProgressIndicatorState extends State<CircularProgressIndicator> w
 
   Widget _buildIndicator(BuildContext context, double headValue, double tailValue, int stepValue, double rotationValue) {
     return new Container(
-      constraints: new BoxConstraints(
+      constraints: const BoxConstraints(
         minWidth: _kMinCircularProgressIndicatorSize,
-        minHeight: _kMinCircularProgressIndicatorSize
+        minHeight: _kMinCircularProgressIndicatorSize,
       ),
       child: new CustomPaint(
         painter: new _CircularProgressIndicatorPainter(

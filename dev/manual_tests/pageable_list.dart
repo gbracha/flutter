@@ -84,31 +84,33 @@ class PageableListAppState extends State<PageableListApp> {
 
   Widget _buildDrawer() {
     return new Drawer(
-      child: new Block(children: <Widget>[
-        new DrawerHeader(child: new Center(child: new Text('Options'))),
-        new DrawerItem(
-          icon: new Icon(Icons.more_horiz),
-          selected: scrollDirection == Axis.horizontal,
-          child: new Text('Horizontal Layout'),
-          onPressed: switchScrollDirection
-        ),
-        new DrawerItem(
-          icon: new Icon(Icons.more_vert),
-          selected: scrollDirection == Axis.vertical,
-          child: new Text('Vertical Layout'),
-          onPressed: switchScrollDirection
-        ),
-        new DrawerItem(
-          onPressed: toggleItemsWrap,
-          child: new Row(
-            children: <Widget>[
-              new Flexible(child: new Text('Scrolling wraps around')),
-              // TODO(abarth): Actually make this checkbox change this value.
-              new Checkbox(value: itemsWrap, onChanged: null)
-            ]
+      child: new ListView(
+        children: <Widget>[
+          new DrawerHeader(child: new Center(child: new Text('Options'))),
+          new DrawerItem(
+            icon: new Icon(Icons.more_horiz),
+            selected: scrollDirection == Axis.horizontal,
+            child: new Text('Horizontal Layout'),
+            onPressed: switchScrollDirection
+          ),
+          new DrawerItem(
+            icon: new Icon(Icons.more_vert),
+            selected: scrollDirection == Axis.vertical,
+            child: new Text('Vertical Layout'),
+            onPressed: switchScrollDirection
+          ),
+          new DrawerItem(
+            onPressed: toggleItemsWrap,
+            child: new Row(
+              children: <Widget>[
+                new Expanded(child: new Text('Scrolling wraps around')),
+                // TODO(abarth): Actually make this checkbox change this value.
+                new Checkbox(value: itemsWrap, onChanged: null)
+              ]
+            )
           )
-        )
-      ])
+        ]
+      )
     );
   }
 
@@ -122,9 +124,9 @@ class PageableListAppState extends State<PageableListApp> {
   }
 
   Widget _buildBody(BuildContext context) {
-    return new PageableList(
-      children: cardModels.map(buildCard),
-      itemsWrap: itemsWrap,
+    return new PageView(
+      children: cardModels.map(buildCard).toList(),
+      // TODO(abarth): itemsWrap: itemsWrap,
       scrollDirection: scrollDirection
     );
   }
@@ -148,7 +150,7 @@ void main() {
     theme: new ThemeData(
       brightness: Brightness.light,
       primarySwatch: Colors.blue,
-      accentColor: Colors.redAccent[200]
+      accentColor: Colors.redAccent[200],
     ),
     home: new PageableListApp()
   ));

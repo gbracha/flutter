@@ -4,7 +4,8 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+
+import 'package:flutter_tools/src/base/io.dart';
 
 Process daemon;
 
@@ -69,7 +70,7 @@ Future<Null> main() async {
     stdout.write('> ');
   });
 
-  daemon.exitCode.then((int code) {
+  daemon.exitCode.then<Null>((int code) {
     print('daemon exiting ($code)');
     exit(code);
   });

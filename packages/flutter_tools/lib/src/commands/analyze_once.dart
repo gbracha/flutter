@@ -4,12 +4,13 @@
 
 import 'dart:async';
 import 'dart:collection';
-import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart' as yaml;
 
+import '../base/common.dart';
+import '../base/file_system.dart';
 import '../cache.dart';
 import '../dart/analysis.dart';
 import '../globals.dart';
@@ -27,7 +28,7 @@ class AnalyzeOnce extends AnalyzeBase {
   AnalyzeOnce(ArgResults argResults, this.repoPackages) : super(argResults);
 
   @override
-  Future<int> analyze() async {
+  Future<Null> analyze() async {
     Stopwatch stopwatch = new Stopwatch()..start();
     Set<Directory> pubSpecDirectories = new HashSet<Directory>();
     List<File> dartFiles = <File>[];
@@ -35,11 +36,11 @@ class AnalyzeOnce extends AnalyzeBase {
     for (String file in argResults.rest.toList()) {
       file = path.normalize(path.absolute(file));
       String root = path.rootPrefix(file);
-      dartFiles.add(new File(file));
+      dartFiles.add(fs.file(file));
       while (file != root) {
         file = path.dirname(file);
-        if (FileSystemEntity.isFileSync(path.join(file, 'pubspec.yaml'))) {
-          pubSpecDirectories.add(new Directory(file));
+        if (fs.isFileSync(path.join(file, 'pubspec.yaml'))) {
+          pubSpecDirectories.add(fs.directory(file));
           break;
         }
       }
@@ -53,7 +54,7 @@ class AnalyzeOnce extends AnalyzeBase {
 
     if (currentDirectory  && !flutterRepo) {
       // ./*.dart
-      Directory currentDirectory = new Directory('.');
+      Directory currentDirectory = fs.directory('.');
       bool foundOne = false;
       for (FileSystemEntity entry in currentDirectory.listSync()) {
         if (isDartFile(entry)) {
@@ -67,19 +68,14 @@ class AnalyzeOnce extends AnalyzeBase {
 
     if (currentPackage && !flutterRepo) {
       // **/.*dart
-      Directory currentDirectory = new Directory('.');
+      Directory currentDirectory = fs.directory('.');
       _collectDartFiles(currentDirectory, dartFiles);
       pubSpecDirectories.add(currentDirectory);
     }
 
-    // TODO(ianh): Fix the intl package resource generator
-    // TODO(pq): extract this regexp from the exclude in options
-    RegExp stockExampleFiles = new RegExp('examples/stocks/lib/i18n/.*\.dart\$');
-
     if (flutterRepo) {
       for (Directory dir in repoPackages) {
-        _collectDartFiles(dir, dartFiles,
-            exclude: (FileSystemEntity entity) => stockExampleFiles.hasMatch(entity.path));
+        _collectDartFiles(dir, dartFiles);
         pubSpecDirectories.add(dir);
       }
     }
@@ -88,18 +84,18 @@ class AnalyzeOnce extends AnalyzeBase {
     PackageDependencyTracker dependencies = new PackageDependencyTracker();
     for (Directory directory in pubSpecDirectories) {
       String pubSpecYamlPath = path.join(directory.path, 'pubspec.yaml');
-      File pubSpecYamlFile = new File(pubSpecYamlPath);
+      File pubSpecYamlFile = fs.file(pubSpecYamlPath);
       if (pubSpecYamlFile.existsSync()) {
         // we are analyzing the actual canonical source for this package;
         // make sure we remember that, in case all the packages are actually
         // pointing elsewhere somehow.
-        yaml.YamlMap pubSpecYaml = yaml.loadYaml(new File(pubSpecYamlPath).readAsStringSync());
+        yaml.YamlMap pubSpecYaml = yaml.loadYaml(fs.file(pubSpecYamlPath).readAsStringSync());
         String packageName = pubSpecYaml['name'];
         String packagePath = path.normalize(path.absolute(path.join(directory.path, 'lib')));
         dependencies.addCanonicalCase(packageName, packagePath, pubSpecYamlPath);
       }
       String dotPackagesPath = path.join(directory.path, '.packages');
-      File dotPackages = new File(dotPackagesPath);
+      File dotPackages = fs.file(dotPackagesPath);
       if (dotPackages.existsSync()) {
         // this directory has opinions about what we should be using
         dotPackages
@@ -115,7 +111,7 @@ class AnalyzeOnce extends AnalyzeBase {
               // Analyzer package versions reached via transitive dependencies (e.g., via `test`) are ignored since they would produce
               // spurious conflicts.
               if (packageName != 'analyzer' || packagePath.startsWith('..'))
-                dependencies.add(packageName, path.normalize(path.absolute(directory.path, path.fromUri(packagePath))), dotPackagesPath);
+                dependencies.add(packageName, path.normalize(path.absolute(directory.path, packagePath)), dotPackagesPath);
             }
         });
       }
@@ -123,12 +119,18 @@ class AnalyzeOnce extends AnalyzeBase {
 
     // prepare a union of all the .packages files
     if (dependencies.hasConflicts) {
-      printError(dependencies.generateConflictReport());
-      printError('Make sure you have run "pub upgrade" in all the directories mentioned above.');
-      if (dependencies.hasConflictsAffectingFlutterRepo)
-        printError('For packages in the flutter repository, try using "flutter update-packages --upgrade" to do all of them at once.');
-      printError('If this does not help, to track down the conflict you can use "pub deps --style=list" and "pub upgrade --verbosity=solver" in the affected directories.');
-      return 1;
+      StringBuffer message = new StringBuffer();
+      message.writeln(dependencies.generateConflictReport());
+      message.writeln('Make sure you have run "pub upgrade" in all the directories mentioned above.');
+      if (dependencies.hasConflictsAffectingFlutterRepo) {
+        message.writeln(
+            'For packages in the flutter repository, try using '
+            '"flutter update-packages --upgrade" to do all of them at once.');
+      }
+      message.write(
+          'If this does not help, to track down the conflict you can use '
+          '"pub deps --style=list" and "pub upgrade --verbosity=solver" in the affected directories.');
+      throwToolExit(message.toString());
     }
     Map<String, String> packages = dependencies.asPackageMap();
 
@@ -157,7 +159,6 @@ class AnalyzeOnce extends AnalyzeBase {
     for (AnalysisErrorDescription error in errors) {
       bool shouldIgnore = false;
       if (error.errorCode.name == 'public_member_api_docs') {
-        // https://github.com/dart-lang/linter/issues/207
         // https://github.com/dart-lang/linter/issues/208
         if (isFlutterLibrary(error.source.fullName)) {
           if (!argResults['dartdocs']) {
@@ -168,15 +169,12 @@ class AnalyzeOnce extends AnalyzeBase {
           shouldIgnore = true;
         }
       }
-      // TODO(ianh): Fix the Dart mojom compiler
-      if (error.source.fullName.endsWith('.mojom.dart'))
-        shouldIgnore = true;
       if (shouldIgnore)
         continue;
       printError(error.asString());
       errorCount += 1;
     }
-    dumpErrors(errors.map/*<String>*/((AnalysisErrorDescription error) => error.asString()));
+    dumpErrors(errors.map<String>((AnalysisErrorDescription error) => error.asString()));
 
     stopwatch.stop();
     String elapsed = (stopwatch.elapsedMilliseconds / 1000.0).toStringAsFixed(1);
@@ -185,11 +183,11 @@ class AnalyzeOnce extends AnalyzeBase {
       writeBenchmark(stopwatch, errorCount, membersMissingDocumentation);
 
     if (errorCount > 0) {
+      // we consider any level of error to be an error exit (we don't report different levels)
       if (membersMissingDocumentation > 0 && flutterRepo)
-        printError('[lint] $membersMissingDocumentation public ${ membersMissingDocumentation == 1 ? "member lacks" : "members lack" } documentation (ran in ${elapsed}s)');
+        throwToolExit('[lint] $membersMissingDocumentation public ${ membersMissingDocumentation == 1 ? "member lacks" : "members lack" } documentation (ran in ${elapsed}s)');
       else
-        print('(Ran in ${elapsed}s)');
-      return 1; // we consider any level of error to be an error exit (we don't report different levels)
+        throwToolExit('(Ran in ${elapsed}s)');
     }
     if (argResults['congratulate']) {
       if (membersMissingDocumentation > 0 && flutterRepo) {
@@ -198,7 +196,6 @@ class AnalyzeOnce extends AnalyzeBase {
         printStatus('No analyzer warnings! (ran in ${elapsed}s)');
       }
     }
-    return 0;
   }
 
   List<String> flutterRootComponents;
@@ -220,18 +217,18 @@ class AnalyzeOnce extends AnalyzeBase {
     return true;
   }
 
-  List<File> _collectDartFiles(Directory dir, List<File> collected, {FileFilter exclude}) {
+  List<File> _collectDartFiles(Directory dir, List<File> collected) {
     // Bail out in case of a .dartignore.
-    if (FileSystemEntity.isFileSync(path.join(path.dirname(dir.path), '.dartignore')))
+    if (fs.isFileSync(path.join(dir.path, '.dartignore')))
       return collected;
 
     for (FileSystemEntity entity in dir.listSync(recursive: false, followLinks: false)) {
-      if (isDartFile(entity) && (exclude == null || !exclude(entity)))
+      if (isDartFile(entity))
         collected.add(entity);
       if (entity is Directory) {
         String name = path.basename(entity.path);
         if (!name.startsWith('.') && name != 'packages')
-          _collectDartFiles(entity, collected, exclude: exclude);
+          _collectDartFiles(entity, collected);
       }
     }
 

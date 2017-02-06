@@ -22,12 +22,11 @@ class _PersistentBottomSheetDemoState extends State<PersistentBottomSheetDemo> {
     _showBottomSheetCallback = _showBottomSheet;
   }
 
-
   void _showBottomSheet() {
     setState(() { // disable the button
       _showBottomSheetCallback = null;
     });
-    _scaffoldKey.currentState.showBottomSheet/*<Null>*/((BuildContext context) {
+    _scaffoldKey.currentState.showBottomSheet<Null>((BuildContext context) {
       final ThemeData themeData = Theme.of(context);
       return new Container(
         decoration: new BoxDecoration(
@@ -45,21 +44,23 @@ class _PersistentBottomSheetDemoState extends State<PersistentBottomSheetDemo> {
         )
       );
     })
-    .closed.then((_) {
-      setState(() { // re-enable the button
-        _showBottomSheetCallback = _showBottomSheet;
-      });
+    .closed.whenComplete(() {
+      if (mounted) {
+        setState(() { // re-enable the button
+          _showBottomSheetCallback = _showBottomSheet;
+        });
+      }
     });
   }
 
   void _showMessage()  {
-    showDialog(
+    showDialog<Null>(
       context: context,
       child: new AlertDialog(
         content: new Text('You tapped the floating action button.'),
         actions: <Widget>[
           new FlatButton(
-            onPressed: () { Navigator.of(context).pop(); },
+            onPressed: () { Navigator.pop(context); },
             child: new Text('OK')
           )
         ]

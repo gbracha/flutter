@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 
 class _Page {
   _Page({ this.label });
-  final GlobalKey<ScrollableState> scrollableKey = new GlobalKey<ScrollableState>();
   final String label;
   String get id => label[0];
 }
@@ -24,55 +23,55 @@ final Map<_Page, List<_CardData>> _allPages = <_Page, List<_CardData>>{
   new _Page(label: 'LEFT'): <_CardData>[
     const _CardData(
       title: 'Vintage Bluetooth Radio',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/radio.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/radio.png',
     ),
     const _CardData(
       title: 'Sunglasses',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/sunnies.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/sunnies.png',
     ),
     const _CardData(
       title: 'Clock',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/clock.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/clock.png',
     ),
     const _CardData(
       title: 'Red popsicle',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/popsicle.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/popsicle.png',
     ),
     const _CardData(
       title: 'Folding Chair',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/lawn_chair.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/lawn_chair.png',
     ),
     const _CardData(
       title: 'Green comfort chair',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/chair.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/chair.png',
     ),
   ],
   new _Page(label: 'RIGHT'): <_CardData>[
     const _CardData(
       title: 'Beachball',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/beachball.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/beachball.png',
     ),
     const _CardData(
       title: 'Old Binoculars',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/binoculars.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/binoculars.png',
     ),
     const _CardData(
       title: 'Teapot',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/teapot.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/teapot.png',
     ),
     const _CardData(
       title: 'Blue suede shoes',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/chucks.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/chucks.png',
     ),
     const _CardData(
       title: 'Dipped Brush',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/brush.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/brush.png',
     ),
     const _CardData(
       title: 'Perfect Goldfish Bowl',
-      imageAsset: 'packages/flutter_gallery_assets/shrine/products/fish_bowl.png'
+      imageAsset: 'packages/flutter_gallery_assets/shrine/products/fish_bowl.png',
     ),
-  ]
+  ],
 };
 
 class _CardDataItem extends StatelessWidget {
@@ -95,76 +94,52 @@ class _CardDataItem extends StatelessWidget {
               alignment: page.id == 'L'
                 ? FractionalOffset.centerLeft
                 : FractionalOffset.centerRight,
-              child: new CircleAvatar(child: new Text('${page.id}'))
+              child: new CircleAvatar(child: new Text('${page.id}')),
             ),
             new SizedBox(
               width: 144.0,
               height: 144.0,
-              child: new Image.asset(data.imageAsset, fit: ImageFit.contain)
+              child: new Image.asset(data.imageAsset, fit: ImageFit.contain),
             ),
             new Center(
-              child: new Text(data.title, style: Theme.of(context).textTheme.title)
-            )
-          ]
-        )
-      )
+              child: new Text(data.title, style: Theme.of(context).textTheme.title),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
 
-class TabsDemo extends StatefulWidget {
-  TabsDemo({ Key key }) : super(key: key);
-
+class TabsDemo extends StatelessWidget {
   static const String routeName = '/tabs';
 
   @override
-  _TabsDemoState createState() => new _TabsDemoState();
-}
-
-class _TabsDemoState extends State<TabsDemo> {
-  _Page _selectedPage;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedPage = _allPages.keys.first;
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return new TabBarSelection<_Page>(
-      values: _allPages.keys.toList(),
-      onChanged: (_Page value) {
-        setState(() {
-          _selectedPage = value;
-       });
-      },
+    return new DefaultTabController(
+      length: _allPages.length,
       child: new Scaffold(
-        scrollableKey: _selectedPage.scrollableKey,
         appBar: new AppBar(
           title: new Text('Tabs and scrolling'),
-          bottom: new TabBar<_Page>(
-            labels: new Map<_Page, TabLabel>.fromIterable(_allPages.keys, value: (_Page page) {
-              return new TabLabel(text: page.label);
-            })
-          )
+          bottom: new TabBar(
+            tabs: _allPages.keys.map((_Page page) => new Tab(text: page.label)).toList(),
+          ),
         ),
-        body: new TabBarView<_Page>(
+        body: new TabBarView(
           children: _allPages.keys.map((_Page page) {
-            return new ScrollableList(
-              scrollableKey: page.scrollableKey,
+            return new ListView(
               padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
               itemExtent: _CardDataItem.height,
               children: _allPages[page].map((_CardData data) {
                 return new Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: new _CardDataItem(page: page, data: data)
+                  child: new _CardDataItem(page: page, data: data),
                 );
-              }).toList()
+              }).toList(),
             );
-          }).toList()
-        )
-      )
+          }).toList(),
+        ),
+      ),
     );
   }
 }

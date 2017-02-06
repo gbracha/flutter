@@ -19,7 +19,7 @@ import 'basic_types.dart';
 /// "type" key will be set to the string `_extensionType` to indicate
 /// that this is a return value from a service extension, and the
 /// "method" key will be set to the full name of the method.
-typedef Future<Map<String, dynamic>> ServiceExtensionCallback(Map<String, String> parameters);
+typedef Future<Map<String, String>> ServiceExtensionCallback(Map<String, String> parameters);
 
 /// Base class for mixins that provide singleton services (also known as
 /// "bindings").
@@ -56,7 +56,7 @@ abstract class BindingBase {
     initServiceExtensions();
     assert(_debugServiceExtensionsRegistered);
 
-    developer.postEvent('Flutter.FrameworkInitialization', <String, dynamic>{});
+    developer.postEvent('Flutter.FrameworkInitialization', <String, String>{});
 
     developer.Timeline.finishSync();
   }
@@ -72,6 +72,8 @@ abstract class BindingBase {
   /// be exposed as `MixinClassName.instance`, a static getter that returns
   /// `MixinClassName._instance`, a static field that is set by
   /// `initInstances()`.
+  @protected
+  @mustCallSuper
   void initInstances() {
     assert(!_debugInitialized);
     assert(() { _debugInitialized = true; return true; });
@@ -97,6 +99,8 @@ abstract class BindingBase {
   /// See also:
   ///
   ///  * <https://github.com/dart-lang/sdk/blob/master/runtime/vm/service/service.md#rpcs-requests-and-responses>
+  @protected
+  @mustCallSuper
   void initServiceExtensions() {
     assert(!_debugServiceExtensionsRegistered);
     registerSignalServiceExtension(
@@ -109,7 +113,7 @@ abstract class BindingBase {
     );
     registerSignalServiceExtension(
       name: 'frameworkPresent',
-      callback: () => null
+      callback: () => new Future<Null>.value()
     );
     assert(() { _debugServiceExtensionsRegistered = true; return true; });
   }
@@ -124,8 +128,9 @@ abstract class BindingBase {
   /// code, and to flush any caches of previously computed values, in
   /// case the new code would compute them differently.
   @mustCallSuper
-  void reassembleApplication() {
+  Future<Null> reassembleApplication() {
     FlutterError.resetErrorCount();
+    return new Future<Null>.value();
   }
 
 
@@ -134,17 +139,18 @@ abstract class BindingBase {
   /// no value.
   ///
   /// Calls the `callback` callback when the service extension is called.
+  @protected
   void registerSignalServiceExtension({
     @required String name,
-    @required VoidCallback callback
+    @required AsyncCallback callback
   }) {
     assert(name != null);
     assert(callback != null);
     registerServiceExtension(
       name: name,
       callback: (Map<String, String> parameters) async {
-        callback();
-        return <String, dynamic>{};
+        await callback();
+        return <String, String>{};
       }
     );
   }
@@ -161,10 +167,11 @@ abstract class BindingBase {
   ///
   /// Calls the `setter` callback with the new value when the
   /// service extension method is called with a new value.
+  @protected
   void registerBoolServiceExtension({
     String name,
-    @required ValueGetter<bool> getter,
-    @required ValueSetter<bool> setter
+    @required AsyncValueGetter<bool> getter,
+    @required AsyncValueSetter<bool> setter
   }) {
     assert(name != null);
     assert(getter != null);
@@ -173,8 +180,8 @@ abstract class BindingBase {
       name: name,
       callback: (Map<String, String> parameters) async {
         if (parameters.containsKey('enabled'))
-          setter(parameters['enabled'] == 'true');
-        return <String, dynamic>{ 'enabled': getter() };
+          await setter(parameters['enabled'] == 'true');
+        return <String, String>{ 'enabled': await getter() ? 'true' : 'false' };
       }
     );
   }
@@ -190,10 +197,11 @@ abstract class BindingBase {
   ///
   /// Calls the `setter` callback with the new value when the
   /// service extension method is called with a new value.
+  @protected
   void registerNumericServiceExtension({
     @required String name,
-    @required ValueGetter<double> getter,
-    @required ValueSetter<double> setter
+    @required AsyncValueGetter<double> getter,
+    @required AsyncValueSetter<double> setter
   }) {
     assert(name != null);
     assert(getter != null);
@@ -202,8 +210,8 @@ abstract class BindingBase {
       name: name,
       callback: (Map<String, String> parameters) async {
         if (parameters.containsKey(name))
-          setter(double.parse(parameters[name]));
-        return <String, dynamic>{ name: getter() };
+          await setter(double.parse(parameters[name]));
+        return <String, String>{ name: (await getter()).toString() };
       }
     );
   }
@@ -218,10 +226,11 @@ abstract class BindingBase {
   ///
   /// Calls the `setter` callback with the new value when the
   /// service extension method is called with a new value.
+  @protected
   void registerStringServiceExtension({
     @required String name,
-    @required ValueGetter<String> getter,
-    @required ValueSetter<String> setter
+    @required AsyncValueGetter<String> getter,
+    @required AsyncValueSetter<String> setter
   }) {
     assert(name != null);
     assert(getter != null);
@@ -230,8 +239,8 @@ abstract class BindingBase {
       name: name,
       callback: (Map<String, String> parameters) async {
         if (parameters.containsKey('value'))
-          setter(parameters['value']);
-        return <String, dynamic>{ 'value': getter() };
+          await setter(parameters['value']);
+        return <String, String>{ 'value': await getter() };
       }
     );
   }
@@ -246,6 +255,7 @@ abstract class BindingBase {
   /// logs.
   ///
   /// The returned map will be mutated.
+  @protected
   void registerServiceExtension({
     @required String name,
     @required ServiceExtensionCallback callback
@@ -257,7 +267,7 @@ abstract class BindingBase {
       assert(method == methodName);
       dynamic caughtException;
       StackTrace caughtStack;
-      Map<String, dynamic> result;
+      Map<String, String> result;
       try {
         result = await callback(parameters);
       } catch (exception, stack) {
@@ -276,10 +286,10 @@ abstract class BindingBase {
         ));
         return new developer.ServiceExtensionResponse.error(
           developer.ServiceExtensionResponse.extensionError,
-          JSON.encode(<String, dynamic>{
+          JSON.encode(<String, String>{
             'exception': caughtException.toString(),
             'stack': caughtStack.toString(),
-            'method': method
+            'method': method,
           })
         );
       }
@@ -291,6 +301,6 @@ abstract class BindingBase {
 }
 
 /// Terminate the Flutter application.
-void _exitApplication() {
+Future<Null> _exitApplication() async {
   exit(0);
 }

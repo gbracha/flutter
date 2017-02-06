@@ -3,9 +3,11 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
+import '../base/io.dart';
 import '../base/os.dart';
+import '../base/platform.dart';
+import '../base/process_manager.dart';
 import '../doctor.dart';
 import '../globals.dart';
 import 'android_sdk.dart';
@@ -29,10 +31,18 @@ class AndroidWorkflow extends DoctorValidator implements Workflow {
     String sdkVersionText;
 
     if (androidSdk == null) {
-      messages.add(new ValidationMessage.error(
-        'Android Studio / Android SDK not found. Download from https://developer.android.com/sdk/\n'
-        '(or visit https://flutter.io/setup/#android-setup for detailed instructions).'
-      ));
+      if (platform.environment.containsKey(kAndroidHome)) {
+        String androidHomeDir = platform.environment[kAndroidHome];
+        messages.add(new ValidationMessage.error(
+          '$kAndroidHome = $androidHomeDir\n'
+          'but Android Studio / Android SDK not found at this location.'
+        ));
+      } else {
+        messages.add(new ValidationMessage.error(
+          'Android Studio / Android SDK not found. Download from https://developer.android.com/sdk/\n'
+          '(or visit https://flutter.io/setup/#android-setup for detailed instructions).'
+        ));
+      }
     } else {
       type = ValidationType.partial;
 
@@ -47,7 +57,13 @@ class AndroidWorkflow extends DoctorValidator implements Workflow {
         ));
       }
 
+      if (platform.environment.containsKey(kAndroidHome)) {
+        String androidHomeDir = platform.environment[kAndroidHome];
+        messages.add(new ValidationMessage('$kAndroidHome = $androidHomeDir'));
+      }
+
       List<String> validationResult = androidSdk.validateSdkWellFormed();
+      // Empty result means SDK is well formated.
 
       if (validationResult.isEmpty) {
         const String _kJdkDownload = 'https://www.oracle.com/technetwork/java/javase/downloads/';
@@ -57,7 +73,7 @@ class AndroidWorkflow extends DoctorValidator implements Workflow {
         try {
           printTrace('java -version');
 
-          ProcessResult result = Process.runSync('java', <String>['-version']);
+          ProcessResult result = processManager.runSync(<String>['java', '-version']);
           if (result.exitCode == 0) {
             javaVersion = result.stderr;
             List<String> versionLines = javaVersion.split('\n');
@@ -79,7 +95,7 @@ class AndroidWorkflow extends DoctorValidator implements Workflow {
           }
         } else {
           messages.add(new ValidationMessage.error(
-            'No Java SDK found; you can download Java from $_kJdkDownload.'
+            'No Java Development Kit (JDK) found; you can download the JDK from $_kJdkDownload.'
           ));
         }
       } else {

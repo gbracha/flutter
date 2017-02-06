@@ -94,7 +94,7 @@ class AssetImage extends AssetBundleImageProvider {
     final AssetBundle chosenBundle = bundle ?? configuration.bundle ?? rootBundle;
     Completer<AssetBundleImageKey> completer;
     Future<AssetBundleImageKey> result;
-    chosenBundle.loadStructuredData(_kAssetManifestFileName, _manifestParser).then(
+    chosenBundle.loadStructuredData<Map<String, List<String>>>(_kAssetManifestFileName, _manifestParser).then<Null>(
       (Map<String, List<String>> manifest) {
         final String chosenName = _chooseVariant(
           name,
@@ -142,9 +142,9 @@ class AssetImage extends AssetBundleImageProvider {
     if (json == null)
       return null;
     // TODO(ianh): JSON decoding really shouldn't be on the main thread.
-    final Map<dynamic, dynamic> parsedManifest = JSON.decode(json);
+    final Map<String, List<String>> parsedManifest = JSON.decode(json);
     // TODO(ianh): convert that data structure to the right types.
-    return new SynchronousFuture<Map<dynamic, dynamic>>(parsedManifest); // ignore: return_of_invalid_type, https://github.com/flutter/flutter/issues/5771
+    return new SynchronousFuture<Map<String, List<String>>>(parsedManifest);
   }
 
   String _chooseVariant(String main, ImageConfiguration config, List<String> candidates) {
@@ -197,5 +197,5 @@ class AssetImage extends AssetBundleImageProvider {
   int get hashCode => hashValues(name, bundle);
 
   @override
-  String toString() => '$runtimeType(bundle: $bundle, name: $name)';
+  String toString() => '$runtimeType(bundle: $bundle, name: "$name")';
 }

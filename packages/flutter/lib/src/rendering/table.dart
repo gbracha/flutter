@@ -24,6 +24,14 @@ class TableCellParentData extends BoxParentData {
 }
 
 /// Base class to describe how wide a column in a [RenderTable] should be.
+///
+/// To size a column to a specific number of pixels, use a [FixedColumnWidth].
+/// This is the cheapest way to size a column.
+///
+/// Other algorithms that are relatively cheap include [FlexColumnWidth], which
+/// distributes the space equally among the flexible columns,
+/// [FractionColumnWidth], which sizes a column based on the size of the
+/// table's container.
 abstract class TableColumnWidth {
   /// Abstract const constructor. This constructor enables subclasses to provide
   /// const constructors so that they can be used in const expressions.
@@ -164,7 +172,7 @@ class FractionColumnWidth extends TableColumnWidth {
 /// Sizes the column by taking a part of the remaining space once all
 /// the other columns have been laid out.
 ///
-/// For example, if two columns have FlexColumnWidth(), then half the
+/// For example, if two columns have a [FlexColumnWidth], then half the
 /// space will go to one and half the space will go to the other.
 ///
 /// This is a cheap way to size a column.
@@ -484,7 +492,7 @@ class RenderTable extends RenderBox {
     assert(rows == null || children == null);
     assert(defaultColumnWidth != null);
     assert(configuration != null);
-    _columns = columns ?? (children != null && children.length > 0 ? children.first.length : 0);
+    _columns = columns ?? (children != null && children.isNotEmpty ? children.first.length : 0);
     _rows = rows ?? 0;
     _children = new List<RenderBox>()..length = _columns * _rows;
     _columnWidths = columnWidths ?? new HashMap<int, TableColumnWidth>();
@@ -683,10 +691,10 @@ class RenderTable extends RenderBox {
       return;
     assert(columns >= 0);
     // consider the case of a newly empty table
-    if (columns == 0 || cells.length == 0) {
-      assert(cells == null || cells.length == 0);
+    if (columns == 0 || cells.isEmpty) {
+      assert(cells == null || cells.isEmpty);
       _columns = columns;
-      if (_children.length == 0) {
+      if (_children.isEmpty) {
         assert(_rows == 0);
         return;
       }
@@ -749,7 +757,7 @@ class RenderTable extends RenderBox {
         dropChild(oldChild);
     }
     _children.clear();
-    _columns = cells.length > 0 ? cells.first.length : 0;
+    _columns = cells.isNotEmpty ? cells.first.length : 0;
     _rows = 0;
     for (List<RenderBox> row in cells)
       addRow(row);
@@ -873,7 +881,7 @@ class RenderTable extends RenderBox {
   @override
   double computeDistanceToActualBaseline(TextBaseline baseline) {
     // returns the baseline of the first cell that has a baseline in the first row
-    assert(!needsLayout);
+    assert(!debugNeedsLayout);
     return _baselineDistance;
   }
 
@@ -1084,7 +1092,7 @@ class RenderTable extends RenderBox {
   Rect getRowBox(int row) {
     assert(row >= 0);
     assert(row < rows);
-    assert(!needsLayout);
+    assert(!debugNeedsLayout);
     return new Rect.fromLTRB(0.0, _rowTops[row], size.width, _rowTops[row + 1]);
   }
 
@@ -1274,14 +1282,12 @@ class RenderTable extends RenderBox {
     super.debugFillDescription(description);
     if (border != null)
       description.add('border: $border');
-    if (_columnWidths.length > 0)
+    if (_columnWidths.isNotEmpty)
       description.add('specified column widths: $_columnWidths');
     description.add('default column width: $defaultColumnWidth');
     description.add('table size: $columns\u00D7$rows');
-    if (!needsLayout) {
-      description.add('column offsets: ${ _columnLefts ?? "unknown" }');
-      description.add('row offsets: ${ _rowTops ?? "unknown" }');
-    }
+    description.add('column offsets: ${ _columnLefts ?? "unknown" }');
+    description.add('row offsets: ${ _rowTops ?? "unknown" }');
   }
 
   @override

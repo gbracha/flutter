@@ -4,12 +4,15 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:args/args.dart';
 import 'package:path/path.dart' as path;
 
+import '../base/common.dart';
+import '../base/file_system.dart';
+import '../base/io.dart';
 import '../base/logger.dart';
+import '../base/process_manager.dart';
 import '../base/utils.dart';
 import '../cache.dart';
 import '../dart/sdk.dart';
@@ -30,7 +33,7 @@ class AnalyzeContinuously extends AnalyzeBase {
   Status analysisStatus;
 
   @override
-  Future<int> analyze() async {
+  Future<Null> analyze() async {
     List<String> directories;
 
     if (argResults['flutter-repo']) {
@@ -40,8 +43,8 @@ class AnalyzeContinuously extends AnalyzeBase {
       for (String projectPath in directories)
         printTrace('  ${path.relative(projectPath)}');
     } else {
-      directories = <String>[Directory.current.path];
-      analysisTarget = Directory.current.path;
+      directories = <String>[fs.currentDirectory.path];
+      analysisTarget = fs.currentDirectory.path;
     }
 
     AnalysisServer server = new AnalysisServer(dartSdkPath, directories);
@@ -53,8 +56,10 @@ class AnalyzeContinuously extends AnalyzeBase {
     await server.start();
     final int exitCode = await server.onExit;
 
-    printStatus('Analysis server exited with code $exitCode.');
-    return 0;
+    String message = 'Analysis server exited with code $exitCode.';
+    if (exitCode != 0)
+      throwToolExit(message, exitCode: exitCode);
+    printStatus(message);
   }
 
   void _handleAnalysisStatus(AnalysisServer server, bool isAnalyzing) {
@@ -66,7 +71,7 @@ class AnalyzeContinuously extends AnalyzeBase {
       analyzedPaths.clear();
       analysisTimer = new Stopwatch()..start();
     } else {
-      analysisStatus?.stop(showElapsedTime: true);
+      analysisStatus?.stop();
       analysisTimer.stop();
 
       logger.printStatus(terminal.clearScreen(), newline: false);
@@ -74,7 +79,7 @@ class AnalyzeContinuously extends AnalyzeBase {
       // Remove errors for deleted files, sort, and print errors.
       final List<AnalysisError> errors = <AnalysisError>[];
       for (String path in analysisErrors.keys.toList()) {
-        if (FileSystemEntity.isFileSync(path)) {
+        if (fs.isFileSync(path)) {
           errors.addAll(analysisErrors[path]);
         } else {
           analysisErrors.remove(path);
@@ -89,7 +94,7 @@ class AnalyzeContinuously extends AnalyzeBase {
           printTrace('error code: ${error.code}');
       }
 
-      dumpErrors(errors.map/*<String>*/((AnalysisError error) => error.toLegacyString()));
+      dumpErrors(errors.map<String>((AnalysisError error) => error.toLegacyString()));
 
       // Print an analysis summary.
       String errorsMessage;
@@ -115,7 +120,7 @@ class AnalyzeContinuously extends AnalyzeBase {
 
       if (firstAnalysis && isBenchmarking) {
         writeBenchmark(analysisTimer, issueCount, -1); // TODO(ianh): track members missing dartdocs instead of saying -1
-        server.dispose().then((_) => exit(issueCount > 0 ? 1 : 0));
+        server.dispose().whenComplete(() { exit(issueCount > 0 ? 1 : 0); });
       }
 
       firstAnalysis = false;
@@ -153,10 +158,15 @@ class AnalysisServer {
 
   Future<Null> start() async {
     String snapshot = path.join(sdk, 'bin/snapshots/analysis_server.dart.snapshot');
-    List<String> args = <String>[snapshot, '--sdk', sdk];
+    List<String> command = <String>[
+      path.join(dartSdkPath, 'bin', 'dart'),
+      snapshot,
+      '--sdk',
+      sdk,
+    ];
 
-    printTrace('dart ${args.join(' ')}');
-    _process = await Process.start(path.join(dartSdkPath, 'bin', 'dart'), args);
+    printTrace('dart ${command.skip(1).join(' ')}');
+    _process = await processManager.start(command);
     _process.exitCode.whenComplete(() => _process = null);
 
     Stream<String> errorStream = _process.stderr.transform(UTF8.decoder).transform(const LineSplitter());

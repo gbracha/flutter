@@ -32,8 +32,6 @@ class CardCollectionState extends State<CardCollection> {
   static const double kCardMargins = 8.0;
   static const double kFixedCardHeight = 100.0;
 
-  final TextStyle backgroundTextStyle = Typography.white.title;
-
   Map<int, Color> _primaryColor = Colors.deepPurple;
   List<CardModel> _cardModels;
   DismissDirection _dismissDirection = DismissDirection.horizontal;
@@ -125,33 +123,35 @@ class CardCollectionState extends State<CardCollection> {
     return new Drawer(
       child: new IconTheme(
         data: const IconThemeData(color: Colors.black),
-        child: new Block(children: <Widget>[
-          new DrawerHeader(child: new Center(child: new Text('Options'))),
-          buildDrawerCheckbox("Make card labels editable", _editable, _toggleEditable),
-          buildDrawerCheckbox("Snap fling scrolls to center", _snapToCenter, _toggleSnapToCenter),
-          buildDrawerCheckbox("Fixed size cards", _fixedSizeCards, _toggleFixedSizeCards),
-          buildDrawerCheckbox("Let the sun shine", _sunshine, _toggleSunshine),
-          buildDrawerCheckbox("Vary font sizes", _varyFontSizes, _toggleVaryFontSizes, enabled: !_editable),
-          new Divider(),
-          buildDrawerColorRadioItem("Deep Purple", Colors.deepPurple, _primaryColor, _selectColor),
-          buildDrawerColorRadioItem("Green", Colors.green, _primaryColor, _selectColor),
-          buildDrawerColorRadioItem("Amber", Colors.amber, _primaryColor, _selectColor),
-          buildDrawerColorRadioItem("Teal", Colors.teal, _primaryColor, _selectColor),
-          new Divider(),
-          buildDrawerDirectionRadioItem("Dismiss horizontally", DismissDirection.horizontal, _dismissDirection, _changeDismissDirection, icon: Icons.code),
-          buildDrawerDirectionRadioItem("Dismiss left", DismissDirection.endToStart, _dismissDirection, _changeDismissDirection, icon: Icons.arrow_back),
-          buildDrawerDirectionRadioItem("Dismiss right", DismissDirection.startToEnd, _dismissDirection, _changeDismissDirection, icon: Icons.arrow_forward),
-          new Divider(),
-          buildFontRadioItem("Left-align text", TextAlign.left, _textAlign, _changeTextAlign, icon: Icons.format_align_left, enabled: !_editable),
-          buildFontRadioItem("Center-align text", TextAlign.center, _textAlign, _changeTextAlign, icon: Icons.format_align_center, enabled: !_editable),
-          buildFontRadioItem("Right-align text", TextAlign.right, _textAlign, _changeTextAlign, icon: Icons.format_align_right, enabled: !_editable),
-          new Divider(),
-          new DrawerItem(
-            icon: new Icon(Icons.dvr),
-            onPressed: () { debugDumpApp(); debugDumpRenderTree(); },
-            child: new Text('Dump App to Console')
-          ),
-        ])
+        child: new ListView(
+          children: <Widget>[
+            new DrawerHeader(child: new Center(child: new Text('Options'))),
+            buildDrawerCheckbox("Make card labels editable", _editable, _toggleEditable),
+            buildDrawerCheckbox("Snap fling scrolls to center", _snapToCenter, _toggleSnapToCenter),
+            buildDrawerCheckbox("Fixed size cards", _fixedSizeCards, _toggleFixedSizeCards),
+            buildDrawerCheckbox("Let the sun shine", _sunshine, _toggleSunshine),
+            buildDrawerCheckbox("Vary font sizes", _varyFontSizes, _toggleVaryFontSizes, enabled: !_editable),
+            new Divider(),
+            buildDrawerColorRadioItem("Deep Purple", Colors.deepPurple, _primaryColor, _selectColor),
+            buildDrawerColorRadioItem("Green", Colors.green, _primaryColor, _selectColor),
+            buildDrawerColorRadioItem("Amber", Colors.amber, _primaryColor, _selectColor),
+            buildDrawerColorRadioItem("Teal", Colors.teal, _primaryColor, _selectColor),
+            new Divider(),
+            buildDrawerDirectionRadioItem("Dismiss horizontally", DismissDirection.horizontal, _dismissDirection, _changeDismissDirection, icon: Icons.code),
+            buildDrawerDirectionRadioItem("Dismiss left", DismissDirection.endToStart, _dismissDirection, _changeDismissDirection, icon: Icons.arrow_back),
+            buildDrawerDirectionRadioItem("Dismiss right", DismissDirection.startToEnd, _dismissDirection, _changeDismissDirection, icon: Icons.arrow_forward),
+            new Divider(),
+            buildFontRadioItem("Left-align text", TextAlign.left, _textAlign, _changeTextAlign, icon: Icons.format_align_left, enabled: !_editable),
+            buildFontRadioItem("Center-align text", TextAlign.center, _textAlign, _changeTextAlign, icon: Icons.format_align_center, enabled: !_editable),
+            buildFontRadioItem("Right-align text", TextAlign.right, _textAlign, _changeTextAlign, icon: Icons.format_align_right, enabled: !_editable),
+            new Divider(),
+            new DrawerItem(
+              icon: new Icon(Icons.dvr),
+              onPressed: () { debugDumpApp(); debugDumpRenderTree(); },
+              child: new Text('Dump App to Console')
+            ),
+          ]
+        )
       )
     );
   }
@@ -215,7 +215,7 @@ class CardCollectionState extends State<CardCollection> {
       onPressed: enabled ? callback : null,
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text(label)),
+          new Expanded(child: new Text(label)),
           new Checkbox(
             value: value,
             onChanged: enabled ? (_) { callback(); } : null
@@ -231,7 +231,7 @@ class CardCollectionState extends State<CardCollection> {
       onPressed: enabled ? () { onChanged(itemValue); } : null,
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text(label)),
+          new Expanded(child: new Text(label)),
           new Radio<Map<int, Color>>(
             value: itemValue,
             groupValue: currentValue,
@@ -248,7 +248,7 @@ class CardCollectionState extends State<CardCollection> {
       onPressed: enabled ? () { onChanged(itemValue); } : null,
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text(label)),
+          new Expanded(child: new Text(label)),
           new Radio<DismissDirection>(
             value: itemValue,
             groupValue: currentValue,
@@ -265,7 +265,7 @@ class CardCollectionState extends State<CardCollection> {
       onPressed: enabled ? () { onChanged(itemValue); } : null,
       child: new Row(
         children: <Widget>[
-          new Flexible(child: new Text(label)),
+          new Expanded(child: new Text(label)),
           new Radio<TextAlign>(
             value: itemValue,
             groupValue: currentValue,
@@ -306,9 +306,8 @@ class CardCollectionState extends State<CardCollection> {
           padding: const EdgeInsets.all(kCardMargins),
           child: _editable ?
             new Center(
-              child: new Input(
+              child: new TextField(
                 key: new GlobalObjectKey(cardModel),
-                value: cardModel.inputValue,
                 onChanged: (InputValue value) {
                   setState(() {
                     cardModel.inputValue = value;
@@ -358,6 +357,9 @@ class CardCollectionState extends State<CardCollection> {
     if (_dismissDirection == DismissDirection.endToStart)
       rightArrowIcon = new Opacity(opacity: 0.1, child: rightArrowIcon);
 
+    final ThemeData theme = Theme.of(context);
+    final TextStyle backgroundTextStyle = theme.primaryTextTheme.title;
+
     // The background Widget appears behind the Dismissable card when the card
     // moves to the left or right. The Positioned widget ensures that the
     // size of the background,card Stack will be based only on the card. The
@@ -369,11 +371,11 @@ class CardCollectionState extends State<CardCollection> {
         child: new Viewport(
           child: new Container(
             height: cardModel.height,
-            decoration: new BoxDecoration(backgroundColor: Theme.of(context).primaryColor),
+            decoration: new BoxDecoration(backgroundColor: theme.primaryColor),
             child: new Row(
               children: <Widget>[
                 leftArrowIcon,
-                new Flexible(
+                new Expanded(
                   child: new Text(backgroundMessage,
                     style: backgroundTextStyle,
                     textAlign: TextAlign.center
@@ -411,7 +413,7 @@ class CardCollectionState extends State<CardCollection> {
       cardCollection = new ScrollableList(
         snapOffsetCallback: _snapToCenter ? _toSnapOffset : null,
         itemExtent: kFixedCardHeight,
-        children: _cardIndices.map/*<Widget>*/((int index) => _buildCard(context, index))
+        children: _cardIndices.map<Widget>((int index) => _buildCard(context, index))
       );
     } else {
       cardCollection = new LazyBlock(

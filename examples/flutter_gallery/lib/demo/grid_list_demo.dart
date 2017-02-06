@@ -3,7 +3,6 @@
 // found in the LICENSE file.
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 enum GridDemoTileStyle {
   imageOnly,
@@ -37,13 +36,28 @@ class GridPhotoViewer extends StatefulWidget {
   _GridPhotoViewerState createState() => new _GridPhotoViewerState();
 }
 
+class _GridTitleText extends StatelessWidget {
+  _GridTitleText(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return new FittedBox(
+      fit: ImageFit.scaleDown,
+      alignment: FractionalOffset.centerLeft,
+      child: new Text(text),
+    );
+  }
+}
+
 class _GridPhotoViewerState extends State<GridPhotoViewer> with SingleTickerProviderStateMixin {
   AnimationController _controller;
-  double _lastScale = 1.0;
+  Animation<Offset> _flingAnimation;
+  Offset _offset = Offset.zero;
   double _scale = 1.0;
-  Point _lastFocalPoint = Point.origin;
-  Point _focalPoint = Point.origin;
-  Animation<Point> _flingAnimation;
+  Offset _normalizedOffset;
+  double _previousScale;
 
   @override
   void initState() {
@@ -58,30 +72,24 @@ class _GridPhotoViewerState extends State<GridPhotoViewer> with SingleTickerProv
     super.dispose();
   }
 
-  // The minimum value for the focal point is 0,0. If the size of this
-  // renderer's box is w,h then the maximum value of the focal point is
-  // (w * _scale - w)/_scale, (h * _scale - h)/_scale.
-  Point _clampFocalPoint(Point point) {
+  // The maximum offset value is 0,0. If the size of this renderer's box is w,h
+  // then the minimum offset value is w - _scale * w, h - _scale * h.
+  Offset _clampOffset(Offset offset) {
     final Size size = context.size;
-    final double inverseScale = (_scale - 1.0) / _scale;
-    final Point bottomRight = new Point(
-      size.width * inverseScale,
-      size.height * inverseScale,
-    );
-     return new Point(point.x.clamp(0.0, bottomRight.x), point.y.clamp(0.0, bottomRight.y));
+    final Offset minOffset = new Offset(size.width, size.height) * (1.0 - _scale);
+    return new Offset(offset.dx.clamp(minOffset.dx, 0.0), offset.dy.clamp(minOffset.dy, 0.0));
   }
 
   void _handleFlingAnimation() {
     setState(() {
-      _focalPoint = _flingAnimation.value;
-      _lastFocalPoint = _focalPoint;
+      _offset = _flingAnimation.value;
     });
   }
 
   void _handleOnScaleStart(ScaleStartDetails details) {
     setState(() {
-      _lastScale = 1.0;
-      _lastFocalPoint = details.focalPoint;
+      _previousScale = _scale;
+      _normalizedOffset = (details.focalPoint.toOffset() - _offset) / _scale;
       // The fling animation stops if an input gesture starts.
       _controller.stop();
     });
@@ -89,10 +97,9 @@ class _GridPhotoViewerState extends State<GridPhotoViewer> with SingleTickerProv
 
   void _handleOnScaleUpdate(ScaleUpdateDetails details) {
     setState(() {
-      _scale = (_scale + (details.scale - _lastScale)).clamp(1.0, 3.0);
-      _lastScale = details.scale;
-      _focalPoint = _clampFocalPoint(_focalPoint + (_lastFocalPoint - details.focalPoint));
-      _lastFocalPoint = details.focalPoint;
+      _scale = (_previousScale * details.scale).clamp(1.0, 4.0);
+      // Ensure that image location under the focal point stays in the same place despite scaling.
+      _offset = _clampOffset(details.focalPoint.toOffset() - _normalizedOffset * _scale);
     });
   }
 
@@ -102,9 +109,9 @@ class _GridPhotoViewerState extends State<GridPhotoViewer> with SingleTickerProv
       return;
     final Offset direction = details.velocity.pixelsPerSecond / magnitude;
     final double distance = (Point.origin & context.size).shortestSide;
-    _flingAnimation = new Tween<Point>(
-      begin: _focalPoint,
-      end: _clampFocalPoint(_focalPoint + direction * -distance)
+    _flingAnimation = new Tween<Offset>(
+      begin: _offset,
+      end: _clampOffset(_offset + direction * distance)
     ).animate(_controller);
     _controller
       ..value = 0.0
@@ -121,12 +128,12 @@ class _GridPhotoViewerState extends State<GridPhotoViewer> with SingleTickerProv
           onScaleEnd: _handleOnScaleEnd,
           child: new Transform(
             transform: new Matrix4.identity()
-              ..translate(_focalPoint.x * (1.0 - _scale), _focalPoint.y * (1.0 - _scale))
+              ..translate(_offset.dx, _offset.dy)
               ..scale(_scale),
             child: new ClipRect(
-              child: new Image.asset(config.photo.assetName, fit: ImageFit.cover)
-            )
-          )
+              child: new Image.asset(config.photo.assetName, fit: ImageFit.cover),
+            ),
+          ),
         );
       }
     );
@@ -156,10 +163,12 @@ class GridDemoPhotoItem extends StatelessWidget {
           appBar: new AppBar(
             title: new Text(photo.title)
           ),
-          body: new Hero(
-            tag: photo.tag,
-            child: new GridPhotoViewer(photo: photo),
-          )
+          body: new SizedBox.expand(
+            child: new Hero(
+              tag: photo.tag,
+              child: new GridPhotoViewer(photo: photo),
+            ),
+          ),
         );
       }
     ));
@@ -187,15 +196,15 @@ class GridDemoPhotoItem extends StatelessWidget {
           header: new GestureDetector(
             onTap: () { onBannerTap(photo); },
             child: new GridTileBar(
-              title: new Text(photo.title),
+              title: new _GridTitleText(photo.title),
               backgroundColor: Colors.black45,
               leading: new Icon(
                 icon,
-                color: Colors.white
-              )
-            )
+                color: Colors.white,
+              ),
+            ),
           ),
-          child: image
+          child: image,
         );
 
       case GridDemoTileStyle.twoLine:
@@ -204,15 +213,15 @@ class GridDemoPhotoItem extends StatelessWidget {
             onTap: () { onBannerTap(photo); },
             child: new GridTileBar(
               backgroundColor: Colors.black45,
-              title: new Text(photo.title),
-              subtitle: new Text(photo.caption),
+              title: new _GridTitleText(photo.title),
+              subtitle: new _GridTitleText(photo.caption),
               trailing: new Icon(
                 icon,
-                color: Colors.white
-              )
-            )
+                color: Colors.white,
+              ),
+            ),
           ),
-          child: image
+          child: image,
         );
     }
     assert(tileStyle != null);
@@ -230,69 +239,68 @@ class GridListDemo extends StatefulWidget {
 }
 
 class GridListDemoState extends State<GridListDemo> {
-  static final GlobalKey<ScrollableState> _scrollableKey = new GlobalKey<ScrollableState>();
   GridDemoTileStyle _tileStyle = GridDemoTileStyle.twoLine;
 
   List<Photo> photos = <Photo>[
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_0.jpg',
       title: 'Philippines',
-      caption: 'Batad rice terraces'
+      caption: 'Batad rice terraces',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_1.jpg',
       title: 'Italy',
-      caption: 'Ceresole Reale'
+      caption: 'Ceresole Reale',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_2.jpg',
       title: 'Somewhere',
-      caption: 'Beautiful mountains'
+      caption: 'Beautiful mountains',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_3.jpg',
       title: 'A place',
-      caption: 'Beautiful hills'
+      caption: 'Beautiful hills',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_4.jpg',
       title: 'New Zealand',
-      caption: 'View from the van'
+      caption: 'View from the van',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_5.jpg',
       title: 'Autumn',
-      caption: 'The golden season'
+      caption: 'The golden season',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_6.jpg',
       title: 'Germany',
-      caption: 'Englischer Garten'
+      caption: 'Englischer Garten',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_7.jpg',
       title: 'A country',
-      caption: 'Grass fields'
+      caption: 'Grass fields',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_8.jpg',
       title: 'Mountain country',
-      caption: 'River forest'
+      caption: 'River forest',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_9.jpg',
       title: 'Alpine place',
-      caption: 'Green hills'
+      caption: 'Green hills',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_10.jpg',
       title: 'Desert land',
-      caption: 'Blue skies'
+      caption: 'Blue skies',
     ),
     new Photo(
       assetName: 'packages/flutter_gallery_assets/landscape_11.jpg',
       title: 'Narnia',
-      caption: 'Rocks and rivers'
+      caption: 'Rocks and rivers',
     ),
   ];
 
@@ -302,14 +310,10 @@ class GridListDemoState extends State<GridListDemo> {
     });
   }
 
-  // When the ScrollableGrid first appears we want the last row to only be
-  // partially visible, to help the user recognize that the grid is scrollable.
-  // The GridListDemoGridDelegate's tileHeightFactor is used for this.
   @override
   Widget build(BuildContext context) {
     final Orientation orientation = MediaQuery.of(context).orientation;
     return new Scaffold(
-      scrollableKey: _scrollableKey,
       appBar: new AppBar(
         title: new Text('Grid list'),
         actions: <Widget>[
@@ -318,32 +322,29 @@ class GridListDemoState extends State<GridListDemo> {
             itemBuilder: (BuildContext context) => <PopupMenuItem<GridDemoTileStyle>>[
               new PopupMenuItem<GridDemoTileStyle>(
                 value: GridDemoTileStyle.imageOnly,
-                child: new Text('Image only')
+                child: new Text('Image only'),
               ),
               new PopupMenuItem<GridDemoTileStyle>(
                 value: GridDemoTileStyle.oneLine,
-                child: new Text('One line')
+                child: new Text('One line'),
               ),
               new PopupMenuItem<GridDemoTileStyle>(
                 value: GridDemoTileStyle.twoLine,
-                child: new Text('Two line')
-              )
-            ]
-          )
-        ]
+                child: new Text('Two line'),
+              ),
+            ],
+          ),
+        ],
       ),
       body: new Column(
         children: <Widget>[
-          new Flexible(
-            child: new ScrollableGrid(
-              scrollableKey: _scrollableKey,
-              delegate: new FixedColumnCountGridDelegate(
-                columnCount: (orientation == Orientation.portrait) ? 2 : 3,
-                rowSpacing: 4.0,
-                columnSpacing: 4.0,
-                padding: const EdgeInsets.all(4.0),
-                tileAspectRatio: (orientation == Orientation.portrait) ? 1.0 : 1.3
-              ),
+          new Expanded(
+            child: new GridView.count(
+              crossAxisCount: (orientation == Orientation.portrait) ? 2 : 3,
+              mainAxisSpacing: 4.0,
+              crossAxisSpacing: 4.0,
+              padding: const EdgeInsets.all(4.0),
+              childAspectRatio: (orientation == Orientation.portrait) ? 1.0 : 1.3,
               children: photos.map((Photo photo) {
                 return new GridDemoPhotoItem(
                   photo: photo,
@@ -354,7 +355,7 @@ class GridListDemoState extends State<GridListDemo> {
                     });
                   }
                 );
-              })
+              }).toList(),
             )
           )
         ]

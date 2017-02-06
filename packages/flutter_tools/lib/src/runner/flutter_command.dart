@@ -3,24 +3,26 @@
 // found in the LICENSE file.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:args/command_runner.dart';
 import 'package:meta/meta.dart';
 
 import '../application_package.dart';
+import '../base/common.dart';
+import '../base/file_system.dart';
 import '../build_info.dart';
 import '../dart/package_map.dart';
 import '../dart/pub.dart';
 import '../device.dart';
+import '../doctor.dart';
 import '../flx.dart' as flx;
 import '../globals.dart';
 import '../usage.dart';
 import 'flutter_command_runner.dart';
 
-typedef bool Validator();
+typedef void Validator();
 
-abstract class FlutterCommand extends Command {
+abstract class FlutterCommand extends Command<Null> {
   FlutterCommand() {
     commandValidator = commonCommandValidator;
   }
@@ -57,7 +59,7 @@ abstract class FlutterCommand extends Command {
   void usesPubOption() {
     argParser.addFlag('pub',
       defaultsTo: true,
-      help: 'Whether to run "pub get" before executing this command.');
+      help: 'Whether to run "flutter packages get" before executing this command.');
     _usesPubOption = true;
   }
 
@@ -107,18 +109,17 @@ abstract class FlutterCommand extends Command {
   /// and [runCommand] to execute the command
   /// so that this method can record and report the overall time to analytics.
   @override
-  Future<int> run() {
+  Future<Null> run() {
     Stopwatch stopwatch = new Stopwatch()..start();
     UsageTimer analyticsTimer = usagePath == null ? null : flutterUsage.startTimer(name);
 
     if (flutterUsage.isFirstRun)
       flutterUsage.printUsage();
 
-    return verifyThenRunCommand().then((int exitCode) {
+    return verifyThenRunCommand().whenComplete(() {
       int ms = stopwatch.elapsedMilliseconds;
-      printTrace("'flutter $name' took ${ms}ms; exiting with code $exitCode.");
+      printTrace("'flutter $name' took ${ms}ms.");
       analyticsTimer?.finish();
-      return exitCode;
     });
   }
 
@@ -130,16 +131,13 @@ abstract class FlutterCommand extends Command {
   /// then call this method to execute the command
   /// rather than calling [runCommand] directly.
   @mustCallSuper
-  Future<int> verifyThenRunCommand() async {
+  Future<Null> verifyThenRunCommand() async {
     // Populate the cache. We call this before pub get below so that the sky_engine
     // package is available in the flutter cache for pub to find.
     await cache.updateAll();
 
-    if (shouldRunPub) {
-      int exitCode = await pubGet();
-      if (exitCode != 0)
-        return exitCode;
-    }
+    if (shouldRunPub)
+      await pubGet();
 
     setupApplicationPackages();
 
@@ -147,11 +145,11 @@ abstract class FlutterCommand extends Command {
     if (commandPath != null)
       flutterUsage.sendCommand(usagePath);
 
-    return await runCommand();
+    await runCommand();
   }
 
   /// Subclasses must implement this to execute the command.
-  Future<int> runCommand();
+  Future<Null> runCommand();
 
   /// Find and return the target [Device] based upon currently connected
   /// devices and criteria entered by the user on the command line.
@@ -206,35 +204,47 @@ abstract class FlutterCommand extends Command {
   // This is a field so that you can modify the value for testing.
   Validator commandValidator;
 
-  bool commonCommandValidator() {
+  void commonCommandValidator() {
     if (!PackageMap.isUsingCustomPackagesPath) {
       // Don't expect a pubspec.yaml file if the user passed in an explicit .packages file path.
-      if (!FileSystemEntity.isFileSync('pubspec.yaml')) {
-        printError('Error: No pubspec.yaml file found.\n'
+      if (!fs.isFileSync('pubspec.yaml')) {
+        throw new ToolExit(
+          'Error: No pubspec.yaml file found.\n'
           'This command should be run from the root of your Flutter project.\n'
-          'Do not run this command from the root of your git clone of Flutter.');
-        return false;
+          'Do not run this command from the root of your git clone of Flutter.'
+        );
+      }
+      if (fs.isFileSync('flutter.yaml')) {
+        throw new ToolExit(
+          'Please merge your flutter.yaml into your pubspec.yaml.\n\n'
+          'We have changed from having separate flutter.yaml and pubspec.yaml\n'
+          'files to having just one pubspec.yaml file. Transitioning is simple:\n'
+          'add a line that just says "flutter:" to your pubspec.yaml file, and\n'
+          'move everything from your current flutter.yaml file into the\n'
+          'pubspec.yaml file, below that line, with everything indented by two\n'
+          'extra spaces compared to how it was in the flutter.yaml file. Then, if\n'
+          'you had a "name:" line, move that to the top of your "pubspec.yaml"\n'
+          'file (you may already have one there), so that there is only one\n'
+          '"name:" line. Finally, delete the flutter.yaml file.\n\n'
+          'For an example of what a new-style pubspec.yaml file might look like,\n'
+          'check out the Flutter Gallery pubspec.yaml:\n'
+          'https://github.com/flutter/flutter/blob/master/examples/flutter_gallery/pubspec.yaml\n'
+        );
       }
     }
 
     if (_usesTargetOption) {
       String targetPath = targetFile;
-      if (!FileSystemEntity.isFileSync(targetPath)) {
-        printError('Target file "$targetPath" not found.');
-        return false;
-      }
+      if (!fs.isFileSync(targetPath))
+        throw new ToolExit('Target file "$targetPath" not found.');
     }
 
     // Validate the current package map only if we will not be running "pub get" later.
     if (!(_usesPubOption && argResults['pub'])) {
       String error = new PackageMap(PackageMap.globalPackagesPath).checkValid();
-      if (error != null) {
-        printError(error);
-        return false;
-      }
+      if (error != null)
+        throw new ToolExit(error);
     }
-
-    return true;
   }
 
   ApplicationPackageStore applicationPackages;

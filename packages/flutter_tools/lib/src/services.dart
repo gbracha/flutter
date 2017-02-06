@@ -4,26 +4,27 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:path/path.dart' as path;
 import 'package:yaml/yaml.dart';
 
+import 'base/file_system.dart';
 import 'dart/package_map.dart';
+import 'android/android_sdk.dart';
 import 'globals.dart';
 
-const String _kFlutterManifestPath = 'flutter.yaml';
+const String _kFlutterManifestPath = 'pubspec.yaml';
 const String _kFlutterServicesManifestPath = 'flutter_services.yaml';
 
 dynamic _loadYamlFile(String path) {
   printTrace("Looking for YAML at '$path'");
-  if (!FileSystemEntity.isFileSync(path))
+  if (!fs.isFileSync(path))
     return null;
-  String manifestString = new File(path).readAsStringSync();
+  String manifestString = fs.file(path).readAsStringSync();
   return loadYaml(manifestString);
 }
 
-/// Loads all services specified in `flutter.yaml`. Parses each service config file,
+/// Loads all services specified in `pubspec.yaml`. Parses each service config file,
 /// storing meta data in [services] and the list of jar files in [jars].
 Future<Null> parseServiceConfigs(
   List<Map<String, String>> services, { List<File> jars }
@@ -36,7 +37,15 @@ Future<Null> parseServiceConfigs(
     return;
   }
 
-  dynamic manifest = _loadYamlFile(_kFlutterManifestPath);
+  dynamic manifest;
+  try {
+    manifest = _loadYamlFile(_kFlutterManifestPath);
+    manifest = manifest['flutter'];
+  } catch (e) {
+    printStatus('Error detected in pubspec.yaml:', emphasis: true);
+    printError(e);
+    return;
+  }
   if (manifest == null || manifest['services'] == null) {
     printTrace('No services specified in the manifest');
     return;
@@ -61,7 +70,7 @@ Future<Null> parseServiceConfigs(
 
     if (jars != null && serviceConfig['jars'] is Iterable) {
       for (String jar in serviceConfig['jars'])
-        jars.add(new File(await getServiceFromUrl(jar, serviceRoot, service, unzip: false)));
+        jars.add(fs.file(await getServiceFromUrl(jar, serviceRoot, service, unzip: false)));
     }
   }
 }
@@ -98,7 +107,7 @@ File generateServiceDefinitions(
       }).toList();
 
   Map<String, dynamic> json = <String, dynamic>{ 'services': services };
-  File servicesFile = new File(path.join(dir, 'services.json'));
+  File servicesFile = fs.file(path.join(dir, 'services.json'));
   servicesFile.writeAsStringSync(JSON.encode(json), mode: FileMode.WRITE, flush: true);
   return servicesFile;
 }

@@ -8,6 +8,9 @@ import 'package:flutter/foundation.dart';
 import 'framework.dart';
 import 'table.dart';
 
+// Any changes to this file should be reflected in the debugAssertAllWidgetVarsUnset()
+// function below.
+
 /// Log the dirty widgets that are built each frame.
 ///
 /// Combined with [debugPrintBuildScope] or [debugPrintBeginFrameBanner], this
@@ -47,6 +50,15 @@ bool debugPrintScheduleBuildForStacks = false;
 ///
 /// This can help track down framework bugs relating to the [GlobalKey] logic.
 bool debugPrintGlobalKeyedWidgetLifecycle = false;
+
+/// Adds [Timeline] events for every Widget built.
+///
+/// For details on how to use [Timeline] events in the Dart Observatory to
+/// optimize your app, see https://fuchsia.googlesource.com/sysui/+/master/docs/performance.md
+bool debugProfileBuildsEnabled = false;
+
+/// Show banners for deprecated widgets.
+bool debugHighlightDeprecatedWidgets = false;
 
 Key _firstNonUniqueKey(Iterable<Widget> widgets) {
   Set<Key> keySet = new HashSet<Key>();
@@ -160,4 +172,26 @@ void debugWidgetBuilderValue(Widget widget, Widget built) {
     }
     return true;
   });
+}
+
+/// Returns true if none of the widget library debug variables have been changed.
+///
+/// This function is used by the test framework to ensure that debug variables
+/// haven't been inadvertently changed.
+///
+/// See [https://docs.flutter.io/flutter/widgets/widgets-library.html] for
+/// a complete list.
+bool debugAssertAllWidgetVarsUnset(String reason) {
+  assert(() {
+    if (debugPrintRebuildDirtyWidgets ||
+        debugPrintBuildScope ||
+        debugPrintScheduleBuildForStacks ||
+        debugPrintGlobalKeyedWidgetLifecycle ||
+        debugProfileBuildsEnabled ||
+        debugHighlightDeprecatedWidgets) {
+      throw new FlutterError(reason);
+    }
+    return true;
+  });
+  return true;
 }

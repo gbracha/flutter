@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../rendering/mock_canvas.dart';
+
 void main() {
   testWidgets('Slider can move when tapped', (WidgetTester tester) async {
     Key sliderKey = new UniqueKey();
@@ -23,12 +25,12 @@ void main() {
                   setState(() {
                     value = newValue;
                   });
-                }
-              )
-            )
+                },
+              ),
+            ),
           );
-        }
-      )
+        },
+      ),
     );
 
     expect(value, equals(0.0));
@@ -57,12 +59,12 @@ void main() {
                   setState(() {
                     value = newValue;
                   });
-                }
-              )
-            )
+                },
+              ),
+            ),
           );
-        }
-      )
+        },
+      ),
     );
 
     expect(value, equals(0.0));
@@ -81,5 +83,79 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     // Animation complete.
     expect(SchedulerBinding.instance.transientCallbackCount, equals(0));
+  });
+
+  testWidgets('Slider can draw an open thumb at min',
+      (WidgetTester tester) async {
+    Widget buildApp(bool thumbOpenAtMin) {
+      return new Material(
+        child: new Center(
+          child: new Slider(
+            value: 0.0,
+            thumbOpenAtMin: thumbOpenAtMin,
+            onChanged: (double newValue) {},
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildApp(false));
+
+    final RenderBox sliderBox =
+        tester.firstRenderObject<RenderBox>(find.byType(Slider));
+
+    expect(sliderBox, paints..circle(style: PaintingStyle.fill));
+    expect(sliderBox, isNot(paints..circle()..circle()));
+    await tester.pumpWidget(buildApp(true));
+    expect(sliderBox, paints..circle(style: PaintingStyle.stroke));
+    expect(sliderBox, isNot(paints..circle()..circle()));
+  });
+
+  testWidgets('Slider can tap in vertical scroller',
+      (WidgetTester tester) async {
+    double value = 0.0;
+    await tester.pumpWidget(new Material(
+      child: new ListView(
+        children: <Widget>[
+          new Slider(
+            value: value,
+            onChanged: (double newValue) {
+              value = newValue;
+            },
+          ),
+          new Container(
+            height: 2000.0,
+          ),
+        ],
+      ),
+    ));
+
+    await tester.tap(find.byType(Slider));
+    expect(value, equals(0.5));
+  });
+
+  testWidgets('Slider drags immediately', (WidgetTester tester) async {
+    double value = 0.0;
+    await tester.pumpWidget(new Material(
+      child: new Center(
+        child: new Slider(
+          value: value,
+          onChanged: (double newValue) {
+            value = newValue;
+          },
+        ),
+      ),
+    ));
+
+    Point center = tester.getCenter(find.byType(Slider));
+    TestGesture gesture = await tester.startGesture(center);
+
+    expect(value, equals(0.5));
+
+    await gesture.moveBy(new Offset(1.0, 0.0));
+
+    expect(value, greaterThan(0.5));
+
+    await gesture.up();
   });
 }

@@ -2,14 +2,19 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'dart:io';
-
 import 'package:path/path.dart' as path;
 import 'package:pub_semver/pub_semver.dart';
 
 import '../base/common.dart';
+import '../base/context.dart';
+import '../base/file_system.dart';
 import '../base/os.dart';
+import '../base/platform.dart';
 import '../globals.dart';
+
+AndroidSdk get androidSdk => context[AndroidSdk];
+
+const String kAndroidHome = 'ANDROID_HOME';
 
 // Android SDK layout:
 
@@ -26,7 +31,8 @@ import '../globals.dart';
 
 // Special case some version names in the sdk.
 const Map<String, int> _namedVersionMap = const <String, int> {
-  'android-N': 24
+  'android-N': 24,
+  'android-stable': 24,
 };
 
 /// Locate ADB. Prefer to use one from an Android SDK, if we can locate that.
@@ -58,14 +64,17 @@ class AndroidSdk {
 
   static AndroidSdk locateAndroidSdk() {
     String androidHomeDir;
-    if (Platform.environment.containsKey('ANDROID_HOME')) {
-      androidHomeDir = Platform.environment['ANDROID_HOME'];
-    } else if (Platform.isLinux) {
+    if (platform.environment.containsKey(kAndroidHome)) {
+      androidHomeDir = platform.environment[kAndroidHome];
+    } else if (platform.isLinux) {
       if (homeDirPath != null)
-        androidHomeDir = '$homeDirPath/Android/Sdk';
-    } else if (Platform.isMacOS) {
+        androidHomeDir = path.join(homeDirPath, 'Android', 'Sdk');
+    } else if (platform.isMacOS) {
       if (homeDirPath != null)
-        androidHomeDir = '$homeDirPath/Library/Android/sdk';
+        androidHomeDir = path.join(homeDirPath, 'Library', 'Android', 'sdk');
+    } else if (platform.isWindows) {
+      if (homeDirPath != null)
+        androidHomeDir = path.join(homeDirPath, 'AppData', 'Local', 'Android', 'sdk');
     }
 
     if (androidHomeDir != null) {
@@ -78,7 +87,7 @@ class AndroidSdk {
     File aaptBin = os.which('aapt'); // in build-tools/$version/aapt
     if (aaptBin != null) {
       // Make sure we're using the aapt from the SDK.
-      aaptBin = new File(aaptBin.resolveSymbolicLinksSync());
+      aaptBin = fs.file(aaptBin.resolveSymbolicLinksSync());
       String dir = aaptBin.parent.parent.parent.path;
       if (validSdkDirectory(dir))
         return new AndroidSdk(dir);
@@ -87,7 +96,7 @@ class AndroidSdk {
     File adbBin = os.which('adb'); // in platform-tools/adb
     if (adbBin != null) {
       // Make sure we're using the adb from the SDK.
-      adbBin = new File(adbBin.resolveSymbolicLinksSync());
+      adbBin = fs.file(adbBin.resolveSymbolicLinksSync());
       String dir = adbBin.parent.parent.path;
       if (validSdkDirectory(dir))
         return new AndroidSdk(dir);
@@ -99,7 +108,7 @@ class AndroidSdk {
   }
 
   static bool validSdkDirectory(String dir) {
-    return FileSystemEntity.isDirectorySync(path.join(dir, 'platform-tools'));
+    return fs.isDirectorySync(path.join(dir, 'platform-tools'));
   }
 
   List<AndroidSdkVersion> get sdkVersions => _sdkVersions;
@@ -111,23 +120,23 @@ class AndroidSdk {
   /// Validate the Android SDK. This returns an empty list if there are no
   /// issues; otherwise, it returns a list of issues found.
   List<String> validateSdkWellFormed() {
-    if (!FileSystemEntity.isFileSync(adbPath))
+    if (!fs.isFileSync(adbPath))
       return <String>['Android SDK file not found: $adbPath.'];
 
     if (sdkVersions.isEmpty || latestVersion == null)
-      return <String>['Android SDK does not have the proper build-tools.'];
+      return <String>['Android SDK is missing command line tools; download from https://goo.gl/XxQghQ'];
 
     return latestVersion.validateSdkWellFormed();
   }
 
   String getPlatformToolsPath(String binaryName) {
-    return path.join(directory, 'platform-tools', binaryName);
+    return path.join(directory, 'platform-tools', os.getExecutableName(binaryName));
   }
 
   void _init() {
     List<String> platforms = <String>[]; // android-22, ...
 
-    Directory platformsDir = new Directory(path.join(directory, 'platforms'));
+    Directory platformsDir = fs.directory(path.join(directory, 'platforms'));
     if (platformsDir.existsSync()) {
       platforms = platformsDir
         .listSync()
@@ -138,7 +147,7 @@ class AndroidSdk {
 
     List<Version> buildTools = <Version>[]; // 19.1.0, 22.0.1, ...
 
-    Directory buildToolsDir = new Directory(path.join(directory, 'build-tools'));
+    Directory buildToolsDir = fs.directory(path.join(directory, 'build-tools'));
     if (buildToolsDir.existsSync()) {
       buildTools = buildToolsDir
         .listSync()
@@ -153,7 +162,7 @@ class AndroidSdk {
         .toList();
     }
 
-    // Match up platforms with the best cooresponding build-tools.
+    // Match up platforms with the best corresponding build-tools.
     _sdkVersions = platforms.map((String platformName) {
       int platformVersion;
 
@@ -212,7 +221,7 @@ class AndroidSdkVersion implements Comparable<AndroidSdkVersion> {
 
   String get aaptPath => getBuildToolsPath('aapt');
 
-  String get dxPath => getBuildToolsPath('dx');
+  String get dxPath => getBuildToolsPath('dx', winExtension: 'bat');
 
   String get zipalignPath => getBuildToolsPath('zipalign');
 
@@ -233,11 +242,11 @@ class AndroidSdkVersion implements Comparable<AndroidSdkVersion> {
   }
 
   String getPlatformsPath(String itemName) {
-    return path.join(sdk.directory, 'platforms', platformVersionName, itemName);
+    return path.join(sdk.directory, 'platforms', platformVersionName, os.getExecutableName(itemName));
   }
 
-  String getBuildToolsPath(String binaryName) {
-    return path.join(sdk.directory, 'build-tools', buildToolsVersionName, binaryName);
+  String getBuildToolsPath(String binaryName, { String winExtension }) {
+    return path.join(sdk.directory, 'build-tools', buildToolsVersionName, os.getExecutableName(binaryName, winExtension: winExtension));
   }
 
   @override
@@ -247,7 +256,7 @@ class AndroidSdkVersion implements Comparable<AndroidSdkVersion> {
   String toString() => '[${sdk.directory}, SDK version $sdkLevel, build-tools $buildToolsVersionName]';
 
   String _exists(String path) {
-    if (!FileSystemEntity.isFileSync(path))
+    if (!fs.isFileSync(path))
       return 'Android SDK file not found: $path.';
     return null;
   }

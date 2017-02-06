@@ -49,14 +49,26 @@ void main() {
   });
 
   test('Velocity control test', () {
-    Velocity velocity1 = new Velocity(pixelsPerSecond: const Offset(7.0, 0.0));
-    Velocity velocity2 = new Velocity(pixelsPerSecond: const Offset(12.0, 0.0));
-    expect(velocity1, equals(new Velocity(pixelsPerSecond: new Offset(7.0, 0.0))));
+    Velocity velocity1 = const Velocity(pixelsPerSecond: const Offset(7.0, 0.0));
+    Velocity velocity2 = const Velocity(pixelsPerSecond: const Offset(12.0, 0.0));
+    expect(velocity1, equals(const Velocity(pixelsPerSecond: const Offset(7.0, 0.0))));
     expect(velocity1, isNot(equals(velocity2)));
-    expect(velocity2 - velocity1, equals(new Velocity(pixelsPerSecond: new Offset(5.0, 0.0))));
-    expect((-velocity1).pixelsPerSecond, new Offset(-7.0, 0.0));
-    expect(velocity1 + velocity2, equals(new Velocity(pixelsPerSecond: new Offset(19.0, 0.0))));
+    expect(velocity2 - velocity1, equals(const Velocity(pixelsPerSecond: const Offset(5.0, 0.0))));
+    expect((-velocity1).pixelsPerSecond, const Offset(-7.0, 0.0));
+    expect(velocity1 + velocity2, equals(const Velocity(pixelsPerSecond: const Offset(19.0, 0.0))));
     expect(velocity1.hashCode, isNot(equals(velocity2.hashCode)));
     expect(velocity1, hasOneLineDescription);
+  });
+
+  test('Interrupted velocity estimation', () {
+    // Regression test for https://github.com/flutter/flutter/pull/7510
+    VelocityTracker tracker = new VelocityTracker();
+    for (PointerEvent event in interruptedVelocityEventData) {
+      if (event is PointerDownEvent || event is PointerMoveEvent)
+        tracker.addPosition(event.timeStamp, event.position);
+      if (event is PointerUpEvent) {
+        _checkVelocity(tracker.getVelocity(), const Offset(649.5, 3890.3));
+      }
+    }
   });
 }

@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-import 'package:meta/meta.dart';
+import 'package:flutter/foundation.dart';
 
 import 'basic.dart';
 import 'framework.dart';
@@ -13,14 +13,15 @@ class DefaultTextStyle extends InheritedWidget {
   /// Creates a default text style for the given subtree.
   ///
   /// Consider using [DefaultTextStyle.merge] to inherit styling information
-  /// from a the current default text style for a given [BuildContext].
+  /// from the current default text style for a given [BuildContext].
   DefaultTextStyle({
     Key key,
     @required this.style,
     this.textAlign,
     this.softWrap: true,
     this.overflow: TextOverflow.clip,
-    Widget child
+    this.maxLines,
+    @required Widget child,
   }) : super(key: key, child: child) {
     assert(style != null);
     assert(softWrap != null);
@@ -31,10 +32,14 @@ class DefaultTextStyle extends InheritedWidget {
   /// A const-constructible default text style that provides fallback values.
   ///
   /// Returned from [of] when the given [BuildContext] doesn't have an enclosing default text style.
+  ///
+  /// This constructor creates a [DefaultTextStyle] that lacks a [child], which
+  /// means the constructed value cannot be incorporated into the tree.
   const DefaultTextStyle.fallback()
     : style = const TextStyle(),
       textAlign = null,
       softWrap = true,
+      maxLines = null,
       overflow = TextOverflow.clip;
 
   /// Creates a default text style that inherits from the given [BuildContext].
@@ -50,7 +55,8 @@ class DefaultTextStyle extends InheritedWidget {
     TextAlign textAlign,
     bool softWrap,
     TextOverflow overflow,
-    Widget child
+    int maxLines,
+    @required Widget child,
   }) {
     assert(context != null);
     assert(child != null);
@@ -61,6 +67,7 @@ class DefaultTextStyle extends InheritedWidget {
       textAlign: textAlign ?? parent.textAlign,
       softWrap: softWrap ?? parent.softWrap,
       overflow: overflow ?? parent.overflow,
+      maxLines: maxLines ?? parent.maxLines,
       child: child
     );
   }
@@ -79,10 +86,21 @@ class DefaultTextStyle extends InheritedWidget {
   /// How visual overflow should be handled.
   final TextOverflow overflow;
 
+  /// An optional maximum number of lines for the text to span, wrapping if necessary.
+  /// If the text exceeds the given number of lines, it will be truncated according
+  /// to [overflow].
+  final int maxLines;
+
   /// The closest instance of this class that encloses the given context.
   ///
   /// If no such instance exists, returns an instance created by
   /// [DefaultTextStyle.fallback], which contains fallback values.
+  ///
+  /// Typical usage is as follows:
+  ///
+  /// ```dart
+  /// DefaultTextStyle style = DefaultTextStyle.of(context);
+  /// ```
   static DefaultTextStyle of(BuildContext context) {
     return context.inheritFromWidgetOfExactType(DefaultTextStyle) ?? const DefaultTextStyle.fallback();
   }
@@ -128,7 +146,8 @@ class Text extends StatelessWidget {
     this.textAlign,
     this.softWrap,
     this.overflow,
-    this.textScaleFactor
+    this.textScaleFactor,
+    this.maxLines,
   }) : super(key: key) {
     assert(data != null);
   }
@@ -162,6 +181,11 @@ class Text extends StatelessWidget {
   /// Defaults to [MediaQuery.textScaleFactor].
   final double textScaleFactor;
 
+  /// An optional maximum number of lines the text is allowed to take up.
+  /// If the text exceeds the given number of lines, it will be truncated according
+  /// to [overflow].
+  final int maxLines;
+
   @override
   Widget build(BuildContext context) {
     DefaultTextStyle defaultTextStyle = DefaultTextStyle.of(context);
@@ -173,6 +197,7 @@ class Text extends StatelessWidget {
       softWrap: softWrap ?? defaultTextStyle.softWrap,
       overflow: overflow ?? defaultTextStyle.overflow,
       textScaleFactor: textScaleFactor ?? MediaQuery.of(context).textScaleFactor,
+      maxLines: maxLines ?? defaultTextStyle.maxLines,
       text: new TextSpan(
         style: effectiveTextStyle,
         text: data

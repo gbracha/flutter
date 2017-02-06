@@ -6,6 +6,8 @@ import 'dart:ui' show hashValues, TextAffinity, TextPosition;
 
 export 'dart:ui' show TextAffinity, TextPosition;
 
+import 'package:meta/meta.dart';
+
 /// A range of characters in a string of text.
 class TextRange {
   /// Creates a text range.
@@ -15,7 +17,10 @@ class TextRange {
   ///
   /// Instead of creating an empty text range, consider using the [empty]
   /// constant.
-  const TextRange({ this.start, this.end });
+  const TextRange({
+    @required this.start,
+    @required this.end
+  });
 
   /// A text range that starts and ends at offset.
   const TextRange.collapsed(int offset)
@@ -41,7 +46,7 @@ class TextRange {
   /// Whether this range is empty (but still potentially placed inside the text).
   bool get isCollapsed => start == end;
 
-  /// Whether the start of this range preceeds the end.
+  /// Whether the start of this range precedes the end.
   bool get isNormalized => end >= start;
 
   /// The text before this range.
@@ -89,8 +94,8 @@ class TextSelection extends TextRange {
   ///
   /// The [baseOffset] and [extentOffset] arguments must not be null.
   const TextSelection({
-    int baseOffset,
-    int extentOffset,
+    @required int baseOffset,
+    @required int extentOffset,
     this.affinity: TextAffinity.downstream,
     this.isDirectional: false
   }) : baseOffset = baseOffset,
@@ -108,7 +113,7 @@ class TextSelection extends TextRange {
   ///
   /// The [offset] argument must not be null.
   const TextSelection.collapsed({
-    int offset,
+    @required int offset,
     this.affinity: TextAffinity.downstream
   }) : baseOffset = offset, extentOffset = offset, isDirectional = false, super.collapsed(offset);
 
@@ -138,7 +143,7 @@ class TextSelection extends TextRange {
   /// Might be larger than, smaller than, or equal to base.
   final int extentOffset;
 
-  /// If the the text range is collpased and has more than one visual location
+  /// If the the text range is collapsed and has more than one visual location
   /// (e.g., occurs at a line break), which of the two locations to use when
   /// painting the caret.
   final TextAffinity affinity;

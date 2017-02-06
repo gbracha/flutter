@@ -4,10 +4,10 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'colors.dart';
 import 'constants.dart';
@@ -38,7 +38,7 @@ import 'typography.dart';
 ///  * [CheckBox]
 ///  * [Radio]
 ///  * [Switch]
-///  * <https://www.google.com/design/spec/components/sliders.html>
+///  * <https://material.google.com/components/sliders.html>
 class Slider extends StatefulWidget {
   /// Creates a material design slider.
   ///
@@ -57,13 +57,15 @@ class Slider extends StatefulWidget {
     this.max: 1.0,
     this.divisions,
     this.label,
-    this.activeColor
+    this.activeColor,
+    this.thumbOpenAtMin: false,
   }) : super(key: key) {
     assert(value != null);
     assert(min != null);
     assert(max != null);
     assert(value >= min && value <= max);
     assert(divisions == null || divisions > 0);
+    assert(thumbOpenAtMin != null);
   }
 
   /// The currently selected value for this slider.
@@ -78,9 +80,28 @@ class Slider extends StatefulWidget {
   /// value.
   ///
   /// If null, the slider will be displayed as disabled.
+  ///
+  /// The callback provided to onChanged should update the state of the parent
+  /// [StatefulWidget] using the [State.setState] method, so that the parent
+  /// gets rebuilt; for example:
+  ///
+  /// ```dart
+  /// new Slider(
+  ///   value: _duelCommandment.toDouble(),
+  ///   min: 1.0,
+  ///   max: 10.0,
+  ///   divisions: 10,
+  ///   label: '$_duelCommandment',
+  ///   onChanged: (double newValue) {
+  ///     setState(() {
+  ///       _duelCommandment = newValue.round();
+  ///     });
+  ///   },
+  /// ),
+  /// ```
   final ValueChanged<double> onChanged;
 
-  /// The minium value the user can select.
+  /// The minimum value the user can select.
   ///
   /// Defaults to 0.0.
   final double min;
@@ -107,6 +128,19 @@ class Slider extends StatefulWidget {
   /// Defaults to accent color of the current [Theme].
   final Color activeColor;
 
+  /// Whether the thumb should be an open circle when the slider is at its minimum position.
+  ///
+  /// When this property is false, the thumb does not change when it the slider
+  /// reaches its minimum position.
+  ///
+  /// This property is useful, for example, when the minimum value represents a
+  /// qualitatively different state. For a slider that controls the volume of
+  /// a sound, for example, the minimum value represents "no sound at all,"
+  /// which is qualitatively different from even a very soft sound.
+  ///
+  /// Defaults to false.
+  final bool thumbOpenAtMin;
+
   @override
   _SliderState createState() => new _SliderState();
 }
@@ -120,11 +154,14 @@ class _SliderState extends State<Slider> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     assert(debugCheckHasMaterial(context));
+    ThemeData theme = Theme.of(context);
     return new _SliderRenderObjectWidget(
       value: (config.value - config.min) / (config.max - config.min),
       divisions: config.divisions,
       label: config.label,
-      activeColor: config.activeColor ?? Theme.of(context).accentColor,
+      activeColor: config.activeColor ?? theme.accentColor,
+      thumbOpenAtMin: config.thumbOpenAtMin,
+      textTheme: theme.accentTextTheme,
       onChanged: config.onChanged != null ? _handleChanged : null,
       vsync: this,
     );
@@ -138,6 +175,8 @@ class _SliderRenderObjectWidget extends LeafRenderObjectWidget {
     this.divisions,
     this.label,
     this.activeColor,
+    this.thumbOpenAtMin,
+    this.textTheme,
     this.onChanged,
     this.vsync,
   }) : super(key: key);
@@ -146,18 +185,24 @@ class _SliderRenderObjectWidget extends LeafRenderObjectWidget {
   final int divisions;
   final String label;
   final Color activeColor;
+  final bool thumbOpenAtMin;
+  final TextTheme textTheme;
   final ValueChanged<double> onChanged;
   final TickerProvider vsync;
 
   @override
-  _RenderSlider createRenderObject(BuildContext context) => new _RenderSlider(
-    value: value,
-    divisions: divisions,
-    label: label,
-    activeColor: activeColor,
-    onChanged: onChanged,
-    vsync: vsync,
-  );
+  _RenderSlider createRenderObject(BuildContext context) {
+    return new _RenderSlider(
+      value: value,
+      divisions: divisions,
+      label: label,
+      activeColor: activeColor,
+      thumbOpenAtMin: thumbOpenAtMin,
+      textTheme: textTheme,
+      onChanged: onChanged,
+      vsync: vsync,
+    );
+  }
 
   @override
   void updateRenderObject(BuildContext context, _RenderSlider renderObject) {
@@ -166,9 +211,11 @@ class _SliderRenderObjectWidget extends LeafRenderObjectWidget {
       ..divisions = divisions
       ..label = label
       ..activeColor = activeColor
+      ..thumbOpenAtMin = thumbOpenAtMin
+      ..textTheme = textTheme
       ..onChanged = onChanged;
-    // Ticker provider cannot change since there's a 1:1 relationship between
-    // the _SliderRenderObjectWidget object and the _SliderState object.
+      // Ticker provider cannot change since there's a 1:1 relationship between
+      // the _SliderRenderObjectWidget object and the _SliderState object.
   }
 }
 
@@ -210,18 +257,27 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
     int divisions,
     String label,
     Color activeColor,
+    bool thumbOpenAtMin,
+    TextTheme textTheme,
     this.onChanged,
     TickerProvider vsync,
   }) : _value = value,
        _divisions = divisions,
        _activeColor = activeColor,
+       _thumbOpenAtMin = thumbOpenAtMin,
+       _textTheme = textTheme,
         super(additionalConstraints: _getAdditionalConstraints(label)) {
     assert(value != null && value >= 0.0 && value <= 1.0);
     this.label = label;
+    GestureArenaTeam team = new GestureArenaTeam();
     _drag = new HorizontalDragGestureRecognizer()
+      ..team = team
       ..onStart = _handleDragStart
       ..onUpdate = _handleDragUpdate
       ..onEnd = _handleDragEnd;
+    _tap = new TapGestureRecognizer()
+      ..team = team
+      ..onTapUp = _handleTapUp;
     _reactionController = new AnimationController(
       duration: kRadialReactionDuration,
       vsync: vsync,
@@ -271,7 +327,7 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
       // https://github.com/flutter/flutter/issues/5938
       _labelPainter
         ..text = new TextSpan(
-          style: Typography.white.body1.copyWith(fontSize: 10.0),
+          style: _textTheme.body1.copyWith(fontSize: 10.0),
           text: newLabel
         )
         ..layout();
@@ -290,6 +346,24 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
     markNeedsPaint();
   }
 
+  bool get thumbOpenAtMin => _thumbOpenAtMin;
+  bool _thumbOpenAtMin;
+  set thumbOpenAtMin(bool value) {
+    if (value == _thumbOpenAtMin)
+      return;
+    _thumbOpenAtMin = value;
+    markNeedsPaint();
+  }
+
+  TextTheme get textTheme => _textTheme;
+  TextTheme _textTheme;
+  set textTheme(TextTheme value) {
+    if (value == _textTheme)
+      return;
+    _textTheme = value;
+    markNeedsPaint();
+  }
+
   ValueChanged<double> onChanged;
 
   double get _trackLength => size.width - 2.0 * _kReactionRadius;
@@ -301,32 +375,36 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
   final TextPainter _labelPainter = new TextPainter();
 
   HorizontalDragGestureRecognizer _drag;
+  TapGestureRecognizer _tap;
   bool _active = false;
   double _currentDragValue = 0.0;
 
-  double get _discretizedCurrentDragValue {
-    double dragValue = _currentDragValue.clamp(0.0, 1.0);
-    if (divisions != null)
-      dragValue = (dragValue * divisions).round() / divisions;
-    return dragValue;
+  bool get isInteractive => onChanged != null;
+
+  double _getValueFromGlobalPosition(Point globalPosition) {
+    return (globalToLocal(globalPosition).x - _kReactionRadius) / _trackLength;
   }
 
-  bool get isInteractive => onChanged != null;
+  double _discretize(double value) {
+    double result = value.clamp(0.0, 1.0);
+    if (divisions != null)
+      result = (result * divisions).round() / divisions;
+    return result;
+  }
 
   void _handleDragStart(DragStartDetails details) {
     if (isInteractive) {
       _active = true;
-      _currentDragValue = (globalToLocal(details.globalPosition).x - _kReactionRadius) / _trackLength;
-      onChanged(_discretizedCurrentDragValue);
+      _currentDragValue = _getValueFromGlobalPosition(details.globalPosition);
+      onChanged(_discretize(_currentDragValue));
       _reactionController.forward();
-      markNeedsPaint();
     }
   }
 
   void _handleDragUpdate(DragUpdateDetails details) {
     if (isInteractive) {
       _currentDragValue += details.primaryDelta / _trackLength;
-      onChanged(_discretizedCurrentDragValue);
+      onChanged(_discretize(_currentDragValue));
     }
   }
 
@@ -335,8 +413,12 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
       _active = false;
       _currentDragValue = 0.0;
       _reactionController.reverse();
-      markNeedsPaint();
     }
+  }
+
+  void _handleTapUp(TapUpDetails details) {
+    if (isInteractive && !_active)
+      onChanged(_discretize(_getValueFromGlobalPosition(details.globalPosition)));
   }
 
   @override
@@ -345,8 +427,11 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
   @override
   void handleEvent(PointerEvent event, BoxHitTestEntry entry) {
     assert(debugHandleEvent(event, entry));
-    if (event is PointerDownEvent && isInteractive)
+    if (event is PointerDownEvent && isInteractive) {
+      // We need to add the drag first so that it has priority.
       _drag.addPointer(event);
+      _tap.addPointer(event);
+    }
   }
 
   @override
@@ -430,7 +515,7 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
 
     Paint thumbPaint = primaryPaint;
     double thumbRadiusDelta = 0.0;
-    if (value == 0.0) {
+    if (value == 0.0 && thumbOpenAtMin) {
       thumbPaint = trackPaint;
       // This is destructive to trackPaint.
       thumbPaint
@@ -454,14 +539,15 @@ class _RenderSlider extends RenderConstrainedBox implements SemanticsActionHandl
 
   @override
   void performAction(SemanticsAction action) {
+    final double unit = divisions != null ? 1.0 / divisions : _kAdjustmentUnit;
     switch (action) {
       case SemanticsAction.increase:
         if (isInteractive)
-          onChanged((value + _kAdjustmentUnit).clamp(0.0, 1.0));
+          onChanged((value + unit).clamp(0.0, 1.0));
         break;
       case SemanticsAction.decrease:
         if (isInteractive)
-          onChanged((value - _kAdjustmentUnit).clamp(0.0, 1.0));
+          onChanged((value - unit).clamp(0.0, 1.0));
         break;
       default:
         assert(false);

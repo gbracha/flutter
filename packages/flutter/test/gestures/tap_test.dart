@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:test/test.dart';
 
@@ -192,7 +193,7 @@ void main() {
     tester.route(down1);
     expect(tapRecognized, isFalse);
 
-    tester.async.elapse(new Duration(milliseconds: 500));
+    tester.async.elapse(const Duration(milliseconds: 500));
     expect(tapRecognized, isFalse);
     tester.route(up1);
     expect(tapRecognized, isTrue);
@@ -259,4 +260,28 @@ void main() {
     tap.dispose();
   });
 
+  testGesture('Should log exceptions from callbacks', (GestureTester tester) {
+    TapGestureRecognizer tap = new TapGestureRecognizer();
+
+    tap.onTap = () {
+      throw new Exception(test);
+    };
+
+    FlutterExceptionHandler previousErrorHandler = FlutterError.onError;
+    bool gotError = false;
+    FlutterError.onError = (FlutterErrorDetails details) {
+      gotError = true;
+    };
+
+    tap.addPointer(down1);
+    tester.closeArena(1);
+    tester.route(down1);
+    expect(gotError, isFalse);
+
+    tester.route(up1);
+    expect(gotError, isTrue);
+
+    FlutterError.onError = previousErrorHandler;
+    tap.dispose();
+  });
 }

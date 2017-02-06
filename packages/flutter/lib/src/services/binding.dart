@@ -9,21 +9,12 @@ import 'package:flutter/foundation.dart';
 
 import 'asset_bundle.dart';
 import 'image_cache.dart';
-import 'shell.dart';
 import 'platform_messages.dart';
 
-/// Ensures that the [MojoShell] singleton is created synchronously
-/// during binding initialization. This allows other binding classes
-/// to register services in the same call stack as the services are
-/// offered to the embedder, thus avoiding any potential race
-/// conditions. For example, without this, the embedder might have
-/// requested a service before the Dart VM has started running; if the
-/// [MojoShell] is then created in an earlier call stack than the
-/// server for that service is provided, then the request will be
-/// rejected as not matching any registered servers.
+/// Listens for platform messages and directs them to [PlatformMessages].
 ///
 /// The ServicesBinding also registers a [LicenseEntryCollector] that exposes
-/// the licenses found in the LICENSE file stored at the root of the asset
+/// the licenses found in the `LICENSE` file stored at the root of the asset
 /// bundle.
 abstract class ServicesBinding extends BindingBase {
   @override
@@ -31,7 +22,6 @@ abstract class ServicesBinding extends BindingBase {
     super.initInstances();
     ui.window
       ..onPlatformMessage = PlatformMessages.handlePlatformMessage;
-    new MojoShell();
     LicenseRegistry.addLicense(_addLicenses);
   }
 
@@ -62,8 +52,8 @@ abstract class ServicesBinding extends BindingBase {
       // out the cache of resources that have changed.
       // TODO(ianh): find a way to only evict affected images, not all images
       name: 'evict',
-      getter: () => '',
-      setter: (String value) {
+      getter: () async => '',
+      setter: (String value) async {
         rootBundle.evict(value);
         imageCache.clear();
       }

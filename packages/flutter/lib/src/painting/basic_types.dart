@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 export 'dart:ui' show
+  BlendMode,
   BlurStyle,
   Canvas,
   Color,
@@ -16,6 +17,7 @@ export 'dart:ui' show
   Paint,
   PaintingStyle,
   Path,
+  PathFillType,
   Point,
   Radius,
   RRect,
@@ -30,7 +32,6 @@ export 'dart:ui' show
   TextDecorationStyle,
   TextDirection,
   TileMode,
-  TransferMode,
   VertexMode,
   VoidCallback,
   hashValues,

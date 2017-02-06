@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
-import 'package:meta/meta.dart';
 
 import 'button.dart';
 import 'theme.dart';
@@ -21,8 +21,13 @@ import 'theme.dart';
 /// corners. Avoid using flat buttons where they would blend in with other
 /// content, for example in the middle of lists.
 ///
-/// If the [onPressed] callback is not specified or null, then the button will
-/// be disabled, will not react to touch, and will be colored as specified by
+/// Material design flat buttons have an all-caps label, some internal padding,
+/// and some defined dimensions. To have a part of your application be
+/// interactive, with ink splashes, without also committing to these stylistic
+/// choices, consider using [InkWell] instead.
+///
+/// If the [onPressed] callback is null, then the button will be disabled,
+/// will not react to touch, and will be colored as specified by
 /// the [disabledColor] property instead of the [color] property. If you are
 /// trying to change the button's [color] and it is not having any effect, check
 /// that you are passing a non-null [onPressed] handler.
@@ -31,9 +36,12 @@ import 'theme.dart';
 ///
 /// See also:
 ///
-///  * [RaisedButton]
-///  * [DropdownButton]
-///  * <https://www.google.com/design/spec/components/buttons.html>
+///  * [RaisedButton], which is a button that hovers above the containing
+///    material.
+///  * [DropdownButton], which offers the user a choice of a number of options.
+///  * [SimpleDialogOption], which is used in [SimpleDialog]s.
+///  * [InkWell], which implements the ink splash part of a flat button.
+///  * <https://material.google.com/components/buttons.html>
 class FlatButton extends StatelessWidget {
   /// Creates a flat button.
   ///
@@ -70,6 +78,16 @@ class FlatButton extends StatelessWidget {
 
   /// The color of the button, as printed on the [Material]. Defaults to null,
   /// meaning that the color is automatically derived from the [Theme].
+  ///
+  /// Typically, a material design color will be used, as follows:
+  ///
+  /// ```dart
+  ///  new FlatButton(
+  ///    color: Colors.blue[500],
+  ///    onPressed: _handleTap,
+  ///    child: new Text('DEMO'),
+  ///  ),
+  /// ```
   final Color color;
 
   /// The color of the button when the button is disabled. Buttons are disabled

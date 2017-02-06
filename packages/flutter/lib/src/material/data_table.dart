@@ -4,6 +4,7 @@
 
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
@@ -34,7 +35,7 @@ class DataColumn {
   ///
   /// The [label] argument must not be null.
   const DataColumn({
-    this.label,
+    @required this.label,
     this.tooltip,
     this.numeric: false,
     this.onSort
@@ -219,11 +220,12 @@ class DataCell {
 ///
 /// See also:
 ///
-///  * [DataColumn]
-///  * [DataRow]
-///  * [DataCell]
-///  * [PaginatedDataTable]
-///  * <https://www.google.com/design/spec/components/data-tables.html>
+///  * [DataColumn], which describes a column in the data table.
+///  * [DataRow], which contains the data for a row in the data table.
+///  * [DataCell], which contains the data for a single cell in the data table.
+///  * [PaginatedDataTable], which shows part of the data in a data table and
+///    provides controls for paging through the remainder of the data.
+///  * <https://material.google.com/components/data-tables.html>
 class DataTable extends StatelessWidget {
   /// Creates a widget describing a data table.
   ///
@@ -259,7 +261,7 @@ class DataTable extends StatelessWidget {
   }) : columns = columns,
        _onlyTextColumn = _initOnlyTextColumn(columns), super(key: key) {
     assert(columns != null);
-    assert(columns.length > 0);
+    assert(columns.isNotEmpty);
     assert(sortColumnIndex == null || (sortColumnIndex >= 0 && sortColumnIndex < columns.length));
     assert(sortAscending != null);
     assert(rows != null);
@@ -397,7 +399,7 @@ class DataTable extends StatelessWidget {
         down: sorted ? ascending : null,
         duration: _kSortArrowAnimationDuration
       );
-      final Widget arrowPadding = new SizedBox(width: _kSortArrowPadding);
+      final Widget arrowPadding = const SizedBox(width: _kSortArrowPadding);
       label = new Row(
         children: numeric ? <Widget>[ arrow, arrowPadding, label ]
                           : <Widget>[ label, arrowPadding, arrow ]
@@ -450,7 +452,7 @@ class DataTable extends StatelessWidget {
     final bool isLightTheme = Theme.of(context).brightness == Brightness.light;
     if (showEditIcon) {
       final Widget icon = new Icon(Icons.edit, size: 18.0);
-      label = new Flexible(child: label);
+      label = new Expanded(child: label);
       label = new Row(children: numeric ? <Widget>[ icon, label ] : <Widget>[ label, icon ]);
     }
     label = new Container(
@@ -595,12 +597,12 @@ class DataTable extends StatelessWidget {
 /// Must have an ancestor [Material] widget in which to cause ink
 /// reactions and an ancestor [Table] widget to establish a row.
 ///
-/// The TableRowInkWell must be in the same coordinate space (modulo
+/// The [TableRowInkWell] must be in the same coordinate space (modulo
 /// translations) as the [Table]. If it's rotated or scaled or
 /// otherwise transformed, it will not be able to describe the
 /// rectangle of the row in its own coordinate system as a [Rect], and
 /// thus the splash will not occur. (In general, this is easy to
-/// achieve: just put the TableRowInkWell as the direct child of the
+/// achieve: just put the [TableRowInkWell] as the direct child of the
 /// [Table], and put the other contents of the cell inside it.)
 class TableRowInkWell extends InkResponse {
   /// Creates an ink well for a table row.

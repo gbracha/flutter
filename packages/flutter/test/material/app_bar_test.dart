@@ -111,8 +111,8 @@ void main() {
     expect(tester.getSize(title).width, equals(800.0 - 72.0 - 8.0));
 
     actions = <Widget>[
-      new SizedBox(width: 100.0),
-      new SizedBox(width: 100.0)
+      const SizedBox(width: 100.0),
+      const SizedBox(width: 100.0)
     ];
     await tester.pumpWidget(buildApp());
 
@@ -171,12 +171,66 @@ void main() {
     leading = null;
     titleWidth = 620.0;
     actions = <Widget>[
-      new SizedBox(width: 45.0),
-      new SizedBox(width: 45.0)
+      const SizedBox(width: 45.0),
+      const SizedBox(width: 45.0)
     ];
     await tester.pumpWidget(buildApp());
     expect(tester.getTopLeft(title).x, 800 - 620 - 45 - 45 - 8);
     expect(tester.getSize(title).width, equals(620.0));
+  });
+
+  testWidgets('AppBar render at zero size', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      new Center(
+        child: new Container(
+          height: 0.0,
+          width: 0.0,
+          child: new Scaffold(
+            appBar: new AppBar(
+              title: new Text('X')
+            )
+          )
+        )
+      )
+    );
+
+    Finder title = find.text('X');
+    expect(tester.getSize(title).isEmpty, isTrue);
+  });
+
+  testWidgets('AppBar actions are vertically centered', (WidgetTester tester) async {
+    UniqueKey appBarKey = new UniqueKey();
+    UniqueKey leadingKey = new UniqueKey();
+    UniqueKey titleKey = new UniqueKey();
+    UniqueKey action0Key = new UniqueKey();
+    UniqueKey action1Key = new UniqueKey();
+
+    await tester.pumpWidget(
+      new MaterialApp(
+        home: new Scaffold(
+          appBar: new AppBar(
+            key: appBarKey,
+            leading: new SizedBox(key: leadingKey, height: 50.0),
+            title: new SizedBox(key: titleKey, height: 40.0),
+            actions: <Widget>[
+              new SizedBox(key: action0Key, height: 20.0),
+              new SizedBox(key: action1Key, height: 30.0),
+            ],
+          ),
+        ),
+      )
+    );
+
+    // The vertical center of the widget with key, in global coordinates.
+    double yCenter(Key key) {
+      RenderBox box = tester.renderObject(find.byKey(appBarKey));
+      return box.localToGlobal(new Point(0.0, box.size.height / 2.0)).y;
+    }
+
+    expect(yCenter(appBarKey), equals(yCenter(leadingKey)));
+    expect(yCenter(appBarKey), equals(yCenter(titleKey)));
+    expect(yCenter(appBarKey), equals(yCenter(action0Key)));
+    expect(yCenter(appBarKey), equals(yCenter(action1Key)));
   });
 
 }
